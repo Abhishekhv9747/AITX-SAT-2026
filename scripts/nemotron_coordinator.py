@@ -205,6 +205,53 @@ class CoordinatorAPIHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
 
+    def do_POST(self):
+        parsed_path = urlparse(self.path)
+        if parsed_path.path == "/api/evaluations":
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                new_evals = json.loads(post_data.decode('utf-8'))
+                if not isinstance(new_evals, list):
+                    new_evals = [new_evals]
+                
+                existing_evals = []
+                if os.path.exists(EVAL_OUTPUT_PATH):
+                    try:
+                        with open(EVAL_OUTPUT_PATH, "r") as f:
+                            existing_evals = json.load(f)
+                    except Exception:
+                        pass
+                        
+                for new_ev in new_evals:
+                    match_idx = -1
+                    for idx, ex in enumerate(existing_evals):
+                        if ex.get("version") == new_ev.get("version") and ex.get("caseId") == new_ev.get("caseId"):
+                            match_idx = idx
+                            break
+                    if match_idx != -1:
+                        existing_evals[match_idx] = new_ev
+                    else:
+                        existing_evals.append(new_ev)
+                        
+                with open(EVAL_OUTPUT_PATH, "w") as out:
+                    json.dump(existing_evals, out, indent=4)
+                    
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "success"}).encode())
+                return
+            except Exception as e:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": str(e)}).encode())
+                return
+        else:
+            self.send_response(404)
+            self.end_headers()
+
     def do_GET(self):
         global coordinator_status, current_logs, latest_mutation, latest_score
         parsed_path = urlparse(self.path)
