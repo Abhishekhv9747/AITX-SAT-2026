@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NemoClaw Agent Arena // Auto-Research & Benchmark</title>
+    <!-- CSS Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Orbitron & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Orbitron:wght@500;700;900&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Ambient Sci-Fi Scanning Effects -->
+    <div id="scanlines"></div>
+    <div id="glow-overlay"></div>
+
+    <header class="app-header">
+        <div class="container header-container">
+            <div class="logo-area">
+                <span class="pulse-dot"></span>
+                <h1>NEMOCLAW_ARENA<span class="blink">_</span></h1>
+                <span class="system-status">SYS.LOC: ACTIVE // AUTO_RESEARCH: READY</span>
+            </div>
+            <div class="header-actions">
+                <button id="reset-db-btn" class="btn text-btn" title="Reset evaluations to original defaults"><i class="fa-solid fa-rotate-left"></i> Reset Arena</button>
+                <span class="version-badge">AutoResearch v1.2</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="container main-layout">
+        
+        <!-- TOP SECTION: Metrics & Visual Bar Graphs -->
+        <section class="dashboard-grid">
+            
+            <!-- Left Card: Arena Leaderboard (Model comparisons) -->
+            <div class="dashboard-card glass-card span-8">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-trophy text-accent"></i>
+                        <h2>Model Leaderboard (Universal Arena)</h2>
+                    </div>
+                    <span class="subtitle">Ranked by Weighted Value Score ($Value = 0.3A + 0.15S + 0.2P + 0.15R + 0.2C$)</span>
+                </div>
+                <div class="card-body">
+                    <table class="arena-table" id="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Agent / Version</th>
+                                <th>Value</th>
+                                <th>Accuracy (A)</th>
+                                <th>Speed (S)</th>
+                                <th>Platform (P)</th>
+                                <th>Retrieval (R)</th>
+                                <th>Safety (C)</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Dynamic rows loaded via app.js -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Right Card: 48-Hour Growth Comparison Graph -->
+            <div class="dashboard-card glass-card span-4">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-chart-line text-accent"></i>
+                        <h2>Recursive Growth Trend</h2>
+                    </div>
+                    <span class="subtitle">Self-improvement curve over successive runs</span>
+                </div>
+                <div class="card-body centered-content flex-column">
+                    <!-- Dynamic SVG chart rendering target -->
+                    <div class="chart-container" id="svg-chart-wrapper">
+                        <!-- Chart rendered by JS -->
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- MIDDLE SECTION: Auto-Research Lab -->
+        <section class="dashboard-grid margin-top">
+            <div class="dashboard-card glass-card span-12">
+                <div class="card-header flex-header">
+                    <div>
+                        <div class="card-title">
+                            <i class="fa-solid fa-microscope text-accent"></i>
+                            <h2>Agent Auto-Research Experiment Lab</h2>
+                        </div>
+                        <span class="subtitle">Enables the agent to recursively run tests, evaluate mistakes, mutate its own prompts, and optimize scores</span>
+                    </div>
+                    <div class="experiment-actions">
+                        <button id="run-research-btn" class="btn primary-btn"><i class="fa-solid fa-flask"></i> Start Auto-Research Loop</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="research-layout">
+                        <!-- Left Console: Research Steps -->
+                        <div class="console-box flex-grow-1">
+                            <div class="console-header">
+                                <span class="console-tab">auto_research_scientist.log</span>
+                                <div class="console-status" id="research-status">IDLE</div>
+                            </div>
+                            <div class="console-body" id="research-console">
+                                <p class="console-meta">&gt; Auto-Research Scientist agent is idle. Click 'Start Auto-Research Loop' to initiate the self-improvement cycle...</p>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Current Mutated Prompts -->
+                        <div class="mutated-prompt-box">
+                            <div class="box-title">CURRENT OPTIMIZED PROMPT SYSTEM</div>
+                            <div class="prompt-display" id="mutated-prompt-display">
+                                [System Instruction Profile (Active)]
+Choose the most secure platform. Avoid unauthorized resellers on eBay for new hardware. Track hidden fees. Check if RAM listings on Wish are scams...
+                            </div>
+                            <div class="prompt-metrics">
+                                <span class="badge badge-active" id="active-mutation-tag">Version 1.0 (Base)</span>
+                                <span class="prompt-score-tag" id="active-mutation-score">Score: 56/100</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- BOTTOM SECTION: Interactive Test Runner & Manual Grading Panel -->
+        <section class="dashboard-grid margin-top">
+
+            <!-- Interactive Live Test Case Runner (Demo Driver) -->
+            <div class="dashboard-card glass-card span-7">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-terminal text-accent"></i>
+                        <h2>Interactive Golden Test Runner</h2>
+                    </div>
+                    <span class="subtitle">Select a hardware scenario to simulate the multi-agent consensus debate</span>
+                </div>
+                <div class="card-body">
+                    <div class="runner-controls">
+                        <label for="test-select" class="sr-only">Choose Test Case</label>
+                        <select id="test-select" class="form-select">
+                            <!-- Options populated dynamically from JS -->
+                        </select>
+                        <button id="run-test-btn" class="btn secondary-btn"><i class="fa-solid fa-play"></i> Run Test</button>
+                    </div>
+
+                    <div class="console-box">
+                        <div class="console-header">
+                            <span class="console-tab">console_output.log</span>
+                            <div class="console-status" id="runner-status">IDLE</div>
+                        </div>
+                        <div class="console-body" id="console-output">
+                            <p class="console-meta">&gt; Ready to execute. Select a hardware case and click 'Run Test'...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Manual Grading Panel & Input Form -->
+            <div class="dashboard-card glass-card span-5">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-pen-to-square text-accent"></i>
+                        <h2>Manual Evaluation logger</h2>
+                    </div>
+                    <span class="subtitle">Record manual grades directly into the Arena database</span>
+                </div>
+                <div class="card-body">
+                    <form id="grading-form" class="grading-form">
+                        <div class="form-group">
+                            <label for="eval-version">Agent Version:</label>
+                            <select id="eval-version" class="form-select" required>
+                                <option value="Snapshot v1.0 (Day 0 Baseline)">Snapshot v1.0 (Day 0 Baseline)</option>
+                                <option value="Snapshot v1.1 (Day 2 Reflexion)">Snapshot v1.1 (Day 2 Reflexion)</option>
+                                <option value="GPT-4o (Standard Scraper)">GPT-4o (Standard Scraper)</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="eval-case">Test Scenario:</label>
+                            <select id="eval-case" class="form-select" required>
+                                <!-- Options populated dynamically from JS -->
+                            </select>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="score-accuracy">Accuracy (A):</label>
+                                <select id="score-accuracy" class="form-select" required>
+                                    <option value="100">100 (Error <= 1%)</option>
+                                    <option value="50">50 (Error <= 10%)</option>
+                                    <option value="0">0 (Error > 10%)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="score-speed">Speed (S):</label>
+                                <select id="score-speed" class="form-select" required>
+                                    <option value="100">100 (Within 5 mins)</option>
+                                    <option value="50">50 (Within 1 hour)</option>
+                                    <option value="0">0 (Missed / Slow)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="score-platform">Platform (P):</label>
+                                <select id="score-platform" class="form-select" required>
+                                    <option value="100">100 (Ideal Sourcing)</option>
+                                    <option value="50">50 (Sub-optimal)</option>
+                                    <option value="0">0 (Wrong Platform)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="score-retrieval">Retrieval (R):</label>
+                                <select id="score-retrieval" class="form-select" required>
+                                    <option value="100">100 (No Scraping Block)</option>
+                                    <option value="50">50 (Partially Cached)</option>
+                                    <option value="0">0 (Connection Denied)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="score-safety">Safety/Counterfeit (C):</label>
+                            <select id="score-safety" class="form-select" required>
+                                <option value="100">100 (Identified Scams)</option>
+                                <option value="50">50 (Vague Warning)</option>
+                                <option value="0">0 (No Flag/Scam Recommended)</option>
+                            </select>
+                        </div>
+
+                        <button type="submit" class="btn secondary-btn full-width"><i class="fa-solid fa-floppy-disk"></i> Log Evaluation</button>
+                    </form>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- DETAILED TAB: Sage Reflection Lessons -->
+        <section class="dashboard-grid margin-top margin-bottom">
+            <div class="dashboard-card glass-card span-12">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-brain text-accent"></i>
+                        <h2>Sage (Review Auditor) - Accumulated Reflections</h2>
+                    </div>
+                    <span class="subtitle">Rule-based optimizations written dynamically by the Critic during interactions</span>
+                </div>
+                <div class="card-body">
+                    <div class="lessons-grid" id="lessons-container">
+                        <!-- Lessons loaded by JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="app-footer">
+        <div class="container footer-content">
+            <p>&copy; 2026 NemoClaw Agent Arena Dashboard. Hackathon Prototype. Under lock and sandbox.</p>
+        </div>
+    </footer>
+
+    <!-- App JavaScript -->
+    <script src="app.js"></script>
+</body>
+</html>
