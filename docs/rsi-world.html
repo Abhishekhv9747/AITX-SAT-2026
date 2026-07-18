@@ -248,9 +248,9 @@ golden:["The golden dataset","Fifteen exam questions that never change.",
 verifiers:["verifiers + vf-eval","The examiner: rollouts, rubric, reward.",
 `<p><b>verifiers</b> is a library for building RL <em>environments</em> — an exam room bundling a dataset (the questions), a <em>rubric</em> (grading functions), and a harness that runs the model on each question. One model attempt at one question is a <em>rollout</em>. The CLI <code>vf-eval</code> runs many rollouts against any OpenAI-compatible endpoint and saves scored results.</p>
 <p class="you"><b>In your system:</b> <code>environments/gpu_deal_judge/</code> is your exam room. The rubric gives 0.4 for avoiding forbidden platforms, 0.3 for the right platform, 0.2 for condition, 0.1 for lead time. Your first real run: 45 rollouts of Nemotron, no memory — mean score <span class="score">0.551</span>.</p>`],
-trend:["The trend line","One honest point so far; the story is the slope.",
-`<p>Every evaluation run becomes one row in <code>data/rsi_runs.csv</code> — version, what changed, score, confidence interval, sample size — and your dashboard draws them as a line. The discipline that keeps it honest: same frozen exam every time, confidence intervals so noise isn't mistaken for progress, and <em>promotion is a human decision</em> — a candidate only becomes the new champion when a person marks it accepted.</p>
-<p class="you"><b>In your system:</b> baseline v1.0 = <span class="score">0.551 ± 0.050</span> (memory OFF, n=45, marked <em>measured</em>). Tomorrow: run the exam with the first night of lessons and watch for the second point.</p>`],
+trend:["The trend line","Fully autonomous: measured nightly, promoted by rule.",
+`<p>Every evaluation run becomes one row in <code>data/rsi_runs.csv</code> and your dashboard draws the line. Nothing waits on a human: a <em>statistical gate</em> decides each night. <b>Promote</b> when the candidate beats the champion by ≥0.01 with its confidence interval clearing the bar; <b>rollback</b> (champion lessons restored automatically) when it regresses by &gt;0.02; <b>hold</b> otherwise. Humans audit the dashboard and the cycle log — they never gate the loop.</p>
+<p class="you"><b>In your system:</b> baseline v1.0 = <span class="score">0.551 ± 0.050</span> (memory OFF, n=45). The cycle runs at 5:30 AM UTC nightly on EC2, thirty minutes after memory distillation — decisions land in <code>/opt/aitx/rsi-cycles.log</code>.</p>`],
 training:["SFT · DPO · GRPO","When notes-to-self become permanent skill.",
 `<p>Three ways experience becomes <em>weights</em> — permanent changes to a model:</p>
 <p><b>SFT</b> (supervised fine-tuning): show the model good examples — "given this request, this was the right answer" — until imitating them is second nature. Your good episodes become exactly these pairs.</p>
@@ -352,9 +352,9 @@ const QUIZ=[
  {k:"crons", q:"What happens at midnight Central every night?",
   o:["The EC2 box shuts down","The daily price digest posts to #daily","Episodic memory synthesis distills the day's chats into episodes and lessons","The benchmark re-runs automatically"], a:2,
   why:"Midnight = memory shift (episodes.jsonl + MEMORY.md). The 8:00 AM shift is the price digest. The box shutdown is July 20 only."},
- {k:"trend", q:"Who decides whether a new version becomes the accepted champion on the trend line?",
-  o:["The agent, if its score improves","The CSV adapter script","Anyone who reacts 👍 in Discord","A human, by explicitly marking the run accepted"], a:3,
-  why:"Promotion is deliberately manual (--accepted true). Scripts measure; people decide. That keeps the trend line honest."}
+ {k:"trend", q:"How does a new version become the accepted champion on the trend line?",
+  o:["A human reviews it and clicks accept","A statistical gate promotes it automatically when it beats the champion beyond the confidence interval","The agent promotes itself when it feels confident","Every nightly run is promoted"], a:1,
+  why:"No human in the loop: promote on a defensible gain (≥0.01 with CI clearance), auto-rollback on a >0.02 regression, hold otherwise. Humans audit the log; they never gate the cycle."}
 ];
 document.getElementById('quizBtn').onclick=()=>{
   tb.classList.remove('on');
