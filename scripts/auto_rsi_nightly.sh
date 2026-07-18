@@ -35,7 +35,7 @@ uv run --with verifiers --with . vf-eval gpu-deal-judge \
   -b "https://integrate.api.nvidia.com/v1" -k OPENAI_API_KEY \
   -n 15 -r 3 -s --env-args "{\"memory_file\": \"$LESSONS\"}" || { echo "eval failed"; exit 1; }
 
-RESULTS=$(ls -t outputs/evals/*/*/results.jsonl | head -1)
+RESULTS=$(ls -t "$PWD"/outputs/evals/*/*/results.jsonl | head -1)
 cd "$REPO"
 DECISION=$(python3 scripts/auto_promote.py "$RESULTS" data/rsi_runs.csv \
   "$VERSION" "Nightly lessons $(date -u +%F) (auto)" | tee /dev/stderr | tail -1)
