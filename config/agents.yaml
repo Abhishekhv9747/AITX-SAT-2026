@@ -73,7 +73,7 @@ agents:
   # ── Internal-only specialists (no Discord identity, ever) ──
   - id: amazon
     description: >-
-      INTERNAL Amazon specialist. Queries Amazon product data (via PA-API when
+      INTERNAL Amazon specialist. Queries Amazon product data (via Creators API when
       credentials are configured, else page fetches) for prices, availability,
       shipping, and review text; forwards review payloads to sage for audit.
       Never posts to Discord; returns structured results to the calling agent

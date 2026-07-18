@@ -4,22 +4,34 @@ Companion to `unified_ecommerce_agent_architecture.md` (Saksham's six-agent
 design) and `config/agents.yaml` (the enforcement). Scope: the daily GPU
 price-watch MVP plus the review-audit loop.
 
-## 1. Open APIs we will access
+## 1. APIs and data sources
 
-| API | Used by (agent) | What for | Cost / access | Key(s) needed |
-|---|---|---|---|---|
-| **eBay Browse API** | ebay | live listings, Buy-It-Now + auction prices, seller feedback | free developer program, OAuth client-credentials | `EBAY_APP_ID`, `EBAY_CERT_ID` (developer.ebay.com) |
-| **Best Buy Products API** | tech | authoritative new-retail GPU prices + availability | free with approval (developer.bestbuy.com) | `BESTBUY_API_KEY` |
-| **Amazon PA-API 5.0** | amazon | Amazon prices, availability, review counts | requires an Amazon Associates account **with qualifying sales** — realistically post-hackathon | `AMAZON_PAAPI_ACCESS_KEY`, `AMAZON_PAAPI_SECRET`, `AMAZON_PARTNER_TAG` |
-| **Tavily Search** | scout, speculator | general price discovery, hardware news for trend calls | free tier (already configured) | `TAVILY_API_KEY` ✓ |
-| **NVIDIA Endpoints** | all (inference) | the models themselves | already configured | `NVIDIA_INFERENCE_API_KEY` ✓ |
-| **Discord API** | main, scout, inspector, concierge | chat + daily ping | free (already configured) | 4 × `DISCORD_BOT_TOKEN*` ✓ |
+Status verified July 18, 2026.
 
-Amazon fallback until PA-API access exists: the amazon agent fetches product
-pages directly (rate-limited, best-effort) — prices still flow into the daily
-digest, marked `source:"page"` instead of `source:"api"`.
-No official APIs exist for Newegg or PCPartPicker; the tech agent treats them
-as page-fetch sources and prefers the Best Buy API for numbers we must trust.
+| Source | What for | Access | Configuration |
+|---|---|---|---|
+| **eBay Browse API** | Live new/used listings, price, shipping, seller data | Free developer account. Browse search uses a client-credentials **application** token. Sandbox and Production keys are separate. | `EBAY_ENV`, `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_MARKETPLACE_ID` |
+| **Best Buy Products API** | Near-real-time retail price, availability, specs, and images | Free API key; recommended second live-price source | `BESTBUY_API_KEY` |
+| **Amazon Creators API** | Amazon catalog, offers, and availability | Replaced PA-API on May 15, 2026. Requires Amazon Associates, 10 qualifying sales in the previous 30 days, app registration, credentials, and partner tag. | `AMAZON_CREATORS_CREDENTIAL_ID`, `AMAZON_CREATORS_CREDENTIAL_SECRET`, `AMAZON_PARTNER_TAG` |
+| **Open Icecat** | Structured manufacturer specs, MPN/GTIN matching, images | Free registration; catalog enrichment, not a dependable live-price feed | `ICECAT_USERNAME` |
+| **Wikidata** | Open identifiers and sparse manufacturer/model metadata | Free SPARQL endpoint, no key; enrichment only | none |
+| **Tavily / Serper** | Discovery and market news | Existing keys; treat discovered prices as unverified until a retailer API confirms them | existing keys |
+| **PCPartPicker** | Human-facing comparison and compatibility links | No public API. Do not depend on its internal endpoints or scrape without permission. | none |
+
+The existing eBay token in the root `.env` was tested successfully against
+Sandbox and rejected by Production, as expected. It is useful for development
+but should not be treated as permanent configuration. Store the matching
+Sandbox or Production Client ID and Client Secret and mint short-lived tokens
+at runtime.
+
+For production eBay data, create or retrieve the **Production** App ID and Cert
+ID under eBay Developer Account → Application Keys. A user-consent token is not
+needed for Browse search; it is only needed later for APIs that access or
+modify a user's own account data.
+
+Do not use Amazon page scraping as a fallback. Amazon's program policies limit
+automated extraction and use of product content. Until Creators API access is
+approved, return an Amazon search/deep link without claiming a verified price.
 
 ## 2. Open datasets
 
@@ -31,11 +43,35 @@ as page-fetch sources and prefers the Best Buy API for numbers we must trust.
 | **GPTARD / ARED** (AI-generated review sets) | modern LLM-fake benchmark | per-paper release pages |
 | **Our own `price-history/*.jsonl`** | Speculator's trend calls; grows daily from the 08:00 job | generated in-sandbox, committed nightly if desired |
 
-No GPU price-history dataset is freely licensed (Keepa/CamelCamelCamel are
-paid/no-API), so the daily job *builds our own* — day one of history starts
-the morning after deployment.
+No dependable, freely licensed GPU price-history dataset was identified.
+Supabase stores our own observations from day one in `price_observations`;
+Keepa is a paid alternative for Amazon history.
 
-## 3. Who talks to whom (enforced, not aspirational)
+## 3. Supabase setup
+
+The local project lives in `supabase/`. API credentials stay in `.env` or a
+deployment secret manager—never in database rows.
+
+```bash
+supabase start
+supabase db reset
+supabase status
+```
+
+For a hosted project:
+
+```bash
+supabase login
+supabase link --project-ref "$SUPABASE_PROJECT_REF"
+supabase db push
+```
+
+The initial migration creates sources, canonical products, external
+identifiers, current listings, price observations, user watchlists, and sync
+runs. Row-level security permits authenticated catalog reads and restricts
+watchlists to their owner; ingestion writes use the server-only service role.
+
+## 4. Who talks to whom (enforced, not aspirational)
 
 Delegation allowlists live in `config/agents.yaml`; Discord exposure is
 decided by `scripts/wire-discord-bots.sh` bindings; egress is policed by the
@@ -72,7 +108,7 @@ flowchart LR
   account, no binding; reachable solely by agent-to-agent delegation.
 - **sage** is terminal: judges payloads it is handed; no network tools.
 
-## 4. Secrets handling & isolation roadmap
+## 5. Secrets handling & isolation roadmap
 
 **Now (single sandbox):** retail API keys enter as env vars; tool allowlists
 limit which agents *use* them, and the identity layer forbids echoing
@@ -88,7 +124,7 @@ second sandbox service; on Kubernetes this becomes the Helm chart with one
 sandbox per pod and NetworkPolicies mirroring the egress rules — the
 retail-assistant example's `helm/` tree is the template.
 
-## 5. The MVP loop (daily 08:00 digest)
+## 6. The MVP loop (daily 08:00 digest)
 
 1. User in `#gpu-desk`: `@Brain watch RTX 5090 daily` → `subscriptions.json`.
 2. OpenClaw cron job (`gpu-daily-watch`, `0 8 * * *`) runs a main-agent turn:
