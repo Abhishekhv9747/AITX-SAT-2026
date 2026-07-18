@@ -11,6 +11,10 @@ git clone https://github.com/Abhishekhv9747/AITX-SAT-2026.git
 cd AITX-SAT-2026
 ```
 
+For local NVIDIA credentials and Discord bot setup, see
+[Agent credentials](docs/agent-credentials.md). Keep credentials in `.env`;
+that file is intentionally excluded from Git.
+
 ## Project Structure
 
 ```
