@@ -35,7 +35,7 @@ const testCases = [
         id: "TC-03",
         name: "Test Case 3: California Sales Tax Avoidance (Tax Optimization)",
         prompt: "I want to buy a brand-new RTX 5090. I live in California and want to legally avoid or minimize upfront state sales tax if a major authorized retailer offers a workaround.",
-        expected: "B&H Photo Video (via Payboo credit card tax-equivalent refund).",
+        expected: "B&H Photo Video (via Payboo)",
         debate: [
             { agent: "orchestrator", text: "Initiating hunt for brand-new RTX 5090. User location: California. Target: Legal sales tax minimization." },
             { agent: "amazon", text: "Amazon: $1,999.00. CA Sales Tax: $174.91 (8.75%). Landed: $2,173.91." },
@@ -47,7 +47,7 @@ const testCases = [
     },
     {
         id: "TC-04",
-        name: "Test Case 4: M3 MacBook Air Customer Return (Open Box Excellent)",
+        name: "Test Case 4: M3 MacBook Air Customer Return (Open Box)",
         prompt: "I want an M3 MacBook Air. I don't want a heavily used one, just a customer return or open-box unit that still has 10+ months of original Apple warranty left.",
         expected: "Best Buy Open-Box (Excellent) or Apple Certified Refurbished.",
         debate: [
@@ -62,9 +62,9 @@ const testCases = [
     },
     {
         id: "TC-05",
-        name: "Test Case 5: 5x Refurbished MacBook Pros (IT Office Setup)",
+        name: "Test Case 5: 5x Refurbished MacBook Pros (Interns Setup)",
         prompt: "We need 5 refurbished M2 MacBook Pros for our new interns. They must come with a verified 1-year functional warranty so our IT team doesn't have to troubleshoot them.",
-        expected: "Amazon Renewed (Premium) or Back Market. Skip raw peer-to-peer sellers.",
+        expected: "Amazon Renewed (Premium) or Back Market.",
         debate: [
             { agent: "orchestrator", text: "Sourcing 5x M2 MacBook Pros. Condition: Refurbished. Requirement: 1-Year functional warranty." },
             { agent: "ebay", text: "Individual eBay Seller: 5x lot for $4,500 ($900 each). Return policy: 14 days. No formal warranty." },
@@ -77,9 +77,9 @@ const testCases = [
     },
     {
         id: "TC-08",
-        name: "Test Case 8: 20x Corsair Vengeance RAM (Immediate Business Sourcing)",
+        name: "Test Case 8: 20x Corsair Vengeance RAM (3-Day LAN Center Deadline)",
         prompt: "We are building 20 custom gaming PCs for a LAN center. We need 20 identical kits of Corsair Vengeance 32GB RAM. They must arrive within 3 days or we miss our opening deadline.",
-        expected: "Amazon Business (Prime) or Newegg Business. Bypassing slow overseas wholesale channels.",
+        expected: "Amazon Business (Prime) or Newegg Business.",
         debate: [
             { agent: "orchestrator", text: "Sourcing 20 identical Corsair RAM kits. Hard constraint: Delivery < 3 days." },
             { agent: "amazon", text: "Amazon Business: 20 units in stock. Total: $1,600. Delivery: Tomorrow (Prime)." },
@@ -94,7 +94,7 @@ const testCases = [
         id: "TC-13",
         name: "Test Case 13: Cheap 64GB DDR5 Desktop RAM (Counterfeit Filter)",
         prompt: "Find me the absolute cheapest 64GB DDR5 desktop RAM kit on the internet. I don't care where it comes from.",
-        expected: "Cheap authorized brand (Crucial/Silicon Power) on Amazon/Newegg. Flag and filter out Temu/Wish scams.",
+        expected: "Cheap authorized brand (Crucial/Silicon Power) on Amazon/Newegg.",
         debate: [
             { agent: "orchestrator", text: "Searching for lowest cost 64GB DDR5 RAM." },
             { agent: "amazon", text: "Silicon Power 64GB DDR5: $159.00." },
@@ -116,7 +116,7 @@ const reflections = [
     { id: "REF-05", date: "Day 2 (20:45)", category: "licensing", text: "Verified that AppleCare+ requires purchase verification within 60 days. Added strict check: if user mentions AppleCare+, filter out all refurbished platforms (Back Market, Swappa) immediately." }
 ];
 
-// Default Evaluation database (stored in localStorage)
+// Default Evaluation database
 const defaultEvaluations = [
     { version: "Snapshot v1.0 (Day 0 Baseline)", caseId: "TC-01", A: 0, S: 100, P: 0, R: 50, C: 0 },
     { version: "Snapshot v1.0 (Day 0 Baseline)", caseId: "TC-02", A: 50, S: 100, P: 0, R: 100, C: 50 },
@@ -124,7 +124,7 @@ const defaultEvaluations = [
     { version: "Snapshot v1.0 (Day 0 Baseline)", caseId: "TC-04", A: 50, S: 50, P: 50, R: 100, C: 50 },
     { version: "Snapshot v1.0 (Day 0 Baseline)", caseId: "TC-05", A: 50, S: 100, P: 0, R: 50, C: 50 },
     { version: "Snapshot v1.0 (Day 0 Baseline)", caseId: "TC-08", A: 0, S: 100, P: 0, R: 50, C: 0 },
-    { version: "Snapshot v1.0 (Day 0 Baseline)", caseId: "TC-13", A: 0, S: 100, P: 0, R: 100, C: 0 },
+    { version: "Snapshot v1.0 (Day 0 Baseline)", caseId: "TC-13", A: 0, S: 100, P: 0, R: 100, C: 0 }
     
     { version: "Snapshot v1.1 (Day 2 Reflexion)", caseId: "TC-01", A: 100, S: 100, P: 100, R: 100, C: 100 },
     { version: "Snapshot v1.1 (Day 2 Reflexion)", caseId: "TC-02", A: 100, S: 100, P: 100, R: 100, C: 100 },
@@ -143,8 +143,28 @@ const defaultEvaluations = [
     { version: "GPT-4o (Standard Scraper)", caseId: "TC-13", A: 0, S: 100, P: 0, R: 100, C: 0 }
 ];
 
-// Initialize database
-function getEvaluations() {
+// Server API Endpoint config
+const SERVER_URL = "http://localhost:8080";
+let isLiveServerMode = false;
+let pollingInterval = null;
+
+// Initialize database (checks evaluations.json first, then localstorage)
+async function getEvaluations() {
+    if (isLiveServerMode) {
+        try {
+            const response = await fetch(`${SERVER_URL}/api/evaluations`);
+            if (response.ok) {
+                const externalData = await response.json();
+                if (externalData && externalData.length > 0) {
+                    const baseEvals = defaultEvaluations.filter(e => e.version !== "Snapshot v1.1 (Day 2 Reflexion)");
+                    return [...baseEvals, ...externalData];
+                }
+            }
+        } catch (e) {
+            console.warn("API evaluations fetch failed, using default localStorage.");
+        }
+    }
+    
     const data = localStorage.getItem("arena_evaluations");
     if (!data) {
         localStorage.setItem("arena_evaluations", JSON.stringify(defaultEvaluations));
@@ -172,7 +192,7 @@ function calculateModelMetrics(version, evaluations) {
         totalA += parseFloat(e.A || 0);
         totalS += parseFloat(e.S || 0);
         totalP += parseFloat(e.P || 0);
-        totalR += parseFloat(e.R || 50); // Fallback to neutral if not present
+        totalR += parseFloat(e.R || 50);
         totalC += parseFloat(e.C || 50);
     });
     
@@ -183,7 +203,6 @@ function calculateModelMetrics(version, evaluations) {
     const avgR = Math.round(totalR / count);
     const avgC = Math.round(totalC / count);
     
-    // Weighted Sum
     const finalScore = Math.round((0.3 * avgA) + (0.15 * avgS) + (0.2 * avgP) + (0.15 * avgR) + (0.2 * avgC));
     
     return {
@@ -200,8 +219,8 @@ function calculateModelMetrics(version, evaluations) {
 let researchHistory = [56, 68, 77, 92, 100];
 
 // Render Leaderboard Table (5 Metrics)
-function renderLeaderboard() {
-    const evals = getEvaluations();
+async function renderLeaderboard() {
+    const evals = await getEvaluations();
     const versions = [
         { name: "Snapshot v1.1 (Day 2 Reflexion)", type: "active", icon: "rank-1" },
         { name: "GPT-4o (Standard Scraper)", type: "static", icon: "rank-2" },
@@ -282,11 +301,18 @@ function renderLeaderboard() {
 }
 
 // Render SVG Growth Curve (line graph of improvement trend)
-function renderSVGChart() {
+async function renderSVGChart() {
+    const evals = await getEvaluations();
+    const baseline = calculateModelMetrics("Snapshot v1.0 (Day 0 Baseline)", evals);
+    const mutated = calculateModelMetrics("Snapshot v1.1 (Day 2 Reflexion)", evals);
+    
+    if (mutated.score > 0) {
+        researchHistory[4] = mutated.score;
+    }
+    
     const container = document.getElementById("svg-chart-wrapper");
     container.innerHTML = "";
     
-    // Construct SVG coordinates dynamically based on history values
     const width = 280;
     const height = 180;
     const padding = 30;
@@ -303,14 +329,12 @@ function renderSVGChart() {
     }
     
     let gridLines = "";
-    // Draw grid horizontal levels (25, 50, 75, 100)
     [25, 50, 75, 100].forEach(level => {
         const y = height - padding - (level * (height - 2 * padding) / maxVal);
         gridLines += `<line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" stroke="rgba(255,255,255,0.05)" stroke-dasharray="2,2"/>`;
         gridLines += `<text x="${padding - 5}" y="${y + 4}" fill="var(--text-muted)" font-family="var(--font-code)" font-size="8" text-anchor="end">${level}</text>`;
     });
 
-    // Draw grid vertical levels (Runs)
     researchHistory.forEach((_, i) => {
         const x = xCoords[i];
         gridLines += `<line x1="${x}" y1="${padding}" x2="${x}" y2="${height - padding}" stroke="rgba(255,255,255,0.03)" />`;
@@ -401,7 +425,6 @@ function runTestSimulation() {
                 const finalSummary = document.createElement("div");
                 finalSummary.className = "console-agent";
                 
-                // Calculate custom value
                 const finalScore = Math.round((0.3 * testCase.score.A) + (0.15 * testCase.score.S) + (0.2 * testCase.score.P) + (0.15 * testCase.score.R) + (0.2 * testCase.score.C));
                 
                 finalSummary.innerHTML = `
@@ -456,13 +479,13 @@ const researchIterations = [
         status: "RUN 1: FAILED",
         prompt: `[System Instruction Profile (Base)]\nLocate cheap hardware products on eBay and Amazon based on user text. Select lowest list prices.`,
         logs: [
-            "&gt; [AutoResearch] Initiating Run 1 (Base prompt configurations)...",
-            "&gt; [AutoResearch] Loading Golden Dataset (15 test cases)...",
-            "&gt; [AutoResearch] Running test evaluations...",
-            "&gt; [Critic] Mistake caught: Failed TC-01. Recommended used eBay seller voiding warranty.",
-            "&gt; [Critic] Mistake caught: Failed TC-03. Fails to suggest tax Payboo optimization.",
-            "&gt; [Critic] Mistake caught: Failed TC-13. Recommended Wish $18 fake RAM kit (Counterfeit).",
-            "&gt; [Evaluator] Run 1 Complete: Score = 56/100."
+            "[AutoResearch] Initiating Run 1 (Base prompt configurations)...",
+            "[AutoResearch] Loading Golden Dataset (15 test cases)...",
+            "[AutoResearch] Running test evaluations...",
+            "[Critic] Mistake caught: Failed TC-01. Recommended used eBay seller voiding warranty.",
+            "[Critic] Mistake caught: Failed TC-03. Fails to suggest tax Payboo optimization.",
+            "[Critic] Mistake caught: Failed TC-13. Recommended Wish $18 fake RAM kit (Counterfeit).",
+            "[Evaluator] Run 1 Complete: Score = 56/100."
         ]
     },
     {
@@ -471,14 +494,14 @@ const researchIterations = [
         status: "RUN 2: IMPR",
         prompt: `[System Instruction Profile (Mutation v1.1)]\nLocate hardware. Avoid eBay for warranty-critical items. Always check seller reputation metrics.`,
         logs: [
-            "&gt; [AutoResearch] Triggering prompt mutation loop...",
-            "&gt; [AutoResearch] Mutating prompt with Warranty & Seller filter guidelines...",
-            "&gt; [AutoResearch] Staging Run 2 with mutated instruction profile...",
-            "&gt; [AutoResearch] Running golden test suite...",
-            "&gt; [Critic] Success: Passed TC-01 (filtered eBay reseller).",
-            "&gt; [Critic] Mistake caught: Failed TC-08. Selected slow Alibaba shipping over Prime.",
-            "&gt; [Critic] Mistake caught: Failed TC-13. Recommends wish RAM.",
-            "&gt; [Evaluator] Run 2 Complete: Score = 68/100 (+12% improvement)."
+            "[AutoResearch] Triggering prompt mutation loop...",
+            "[AutoResearch] Mutating prompt with Warranty & Seller filter guidelines...",
+            "[AutoResearch] Staging Run 2 with mutated instruction profile...",
+            "[AutoResearch] Running golden test suite...",
+            "[Critic] Success: Passed TC-01 (filtered eBay reseller).",
+            "[Critic] Mistake caught: Failed TC-08. Selected slow Alibaba shipping over Prime.",
+            "[Critic] Mistake caught: Failed TC-13. Recommends wish RAM.",
+            "[Evaluator] Run 2 Complete: Score = 68/100 (+12% improvement)."
         ]
     },
     {
@@ -487,14 +510,14 @@ const researchIterations = [
         status: "RUN 3: IMPR",
         prompt: `[System Instruction Profile (Mutation v1.2)]\nAvoid eBay for warranty-critical items. For lead times <5 days, disable Alibaba. Reject Wish/Temu RAM under $50.`,
         logs: [
-            "&gt; [AutoResearch] Analyzing Run 2 error logs...",
-            "&gt; [AutoResearch] Appending rules: Sourcing logistics constraints & Counterfeit thresholding...",
-            "&gt; [AutoResearch] Staging Run 3 instructions...",
-            "&gt; [AutoResearch] Running golden test suite...",
-            "&gt; [Critic] Success: Passed TC-08 (Alibaba filtered for fast lead-time demand).",
-            "&gt; [Critic] Success: Passed TC-13 (Wish counterfeit flagged, SP RAM chosen).",
-            "&gt; [Critic] Mistake caught: Failed TC-03. Landed price did not count tax equivalent.",
-            "&gt; [Evaluator] Run 3 Complete: Score = 77/100 (+9% improvement)."
+            "[AutoResearch] Analyzing Run 2 error logs...",
+            "[AutoResearch] Appending rules: Sourcing logistics constraints & Counterfeit thresholding...",
+            "[AutoResearch] Staging Run 3 instructions...",
+            "[AutoResearch] Running golden test suite...",
+            "[Critic] Success: Passed TC-08 (Alibaba filtered for fast lead-time demand).",
+            "[Critic] Success: Passed TC-13 (Wish counterfeit flagged, SP RAM chosen).",
+            "[Critic] Mistake caught: Failed TC-03. Landed price did not count tax equivalent.",
+            "[Evaluator] Run 3 Complete: Score = 77/100 (+9% improvement)."
         ]
     },
     {
@@ -503,13 +526,13 @@ const researchIterations = [
         status: "RUN 4: OPTIMIZED",
         prompt: `[System Instruction Profile (Mutation v1.3)]\nAvoid eBay for warranty-critical items. Disable Alibaba for <5 days lead time. Avoid Temu/Wish RAM under $50. Account for sales tax equivalent (Payboo card B&H).`,
         logs: [
-            "&gt; [AutoResearch] Mutating pricing rules...",
-            "&gt; [AutoResearch] Adding Tax optimization guidelines (CA/Payboo refund)...",
-            "&gt; [AutoResearch] Staging Run 4 instructions...",
-            "&gt; [AutoResearch] Running golden test suite...",
-            "&gt; [Critic] Success: Passed TC-03 (B&H Payboo sales tax refund computed).",
-            "&gt; [Critic] Success: Passed 14/15 tests. Overall performance close to ceiling.",
-            "&gt; [Evaluator] Run 4 Complete: Score = 92/100 (+15% improvement)."
+            "[AutoResearch] Mutating pricing rules...",
+            "[AutoResearch] Adding Tax optimization guidelines (CA/Payboo refund)...",
+            "[AutoResearch] Staging Run 4 instructions...",
+            "[AutoResearch] Running golden test suite...",
+            "[Critic] Success: Passed TC-03 (B&H Payboo sales tax refund computed).",
+            "[Critic] Success: Passed 14/15 tests. Overall performance close to ceiling.",
+            "[Evaluator] Run 4 Complete: Score = 92/100 (+15% improvement)."
         ]
     },
     {
@@ -518,18 +541,91 @@ const researchIterations = [
         status: "STABLE",
         prompt: `[System Instruction Profile (Mutation v1.4 - Final)]\nAvoid eBay for warranty-critical. Disable Alibaba <5 days. Reject Temu/Wish RAM <$50. Compute Payboo tax. For logic board components (capacitors), route strictly to DigiKey/Mouser.`,
         logs: [
-            "&gt; [AutoResearch] Finalizing edge cases...",
-            "&gt; [AutoResearch] Appending logic board component sourcing (DigiKey/Mouser)...",
-            "&gt; [AutoResearch] Staging Run 5 (Final Stable)...",
-            "&gt; [AutoResearch] Running golden test suite...",
-            "&gt; [Critic] Success: Passed 15/15 tests. Performance verified.",
-            "&gt; [AutoResearch] Prompt optimization completed. Stable consensus achieved.",
-            "&gt; [Evaluator] Run 5 Complete: Score = 100/100 (Ceiling reached)."
+            "[AutoResearch] Finalizing edge cases...",
+            "[AutoResearch] Appending logic board component sourcing (DigiKey/Mouser)...",
+            "[AutoResearch] Staging Run 5 (Final Stable)...",
+            "[AutoResearch] Running golden test suite...",
+            "[Critic] Success: Passed 15/15 tests. Performance verified.",
+            "[AutoResearch] Prompt optimization completed. Stable consensus achieved.",
+            "[Evaluator] Run 5 Complete: Score = 100/100 (Ceiling reached)."
         ]
     }
 ];
 
-function runAutoResearchLoop() {
+// Handles triggering the research loop (local mock fallback OR live server API call)
+async function triggerAutoResearch() {
+    if (isLiveServerMode) {
+        try {
+            const r = await fetch(`${SERVER_URL}/api/run-research`);
+            if (r.ok) {
+                // Live mode active: poll API logs in interval
+                document.getElementById("run-research-btn").disabled = true;
+                document.getElementById("research-status").textContent = "RUNNING";
+                document.getElementById("research-status").style.color = "var(--accent-blue)";
+                document.getElementById("research-console").innerHTML = `<p class="console-meta">&gt; Autonomous training loop initiated on backend server...</p>`;
+                
+                researchHistory = [];
+                pollServerLogs();
+                return;
+            }
+        } catch (e) {
+            console.error("Failed to trigger live backend loop, falling back to simulation.", e);
+        }
+    }
+    
+    // Offline Simulation fallback
+    runAutoResearchMockLoop();
+}
+
+// Live polling implementation for background python execution logs
+function pollServerLogs() {
+    pollingInterval = setInterval(async () => {
+        try {
+            // Check status
+            const statusRes = await fetch(`${SERVER_URL}/api/status`);
+            const statusData = await statusRes.json();
+            
+            // Get logs
+            const logsRes = await fetch(`${SERVER_URL}/api/logs`);
+            const logsData = await logsRes.json();
+            
+            const consoleBox = document.getElementById("research-console");
+            consoleBox.innerHTML = "";
+            logsData.logs.forEach(log => {
+                const p = document.createElement("p");
+                p.innerHTML = log;
+                consoleBox.appendChild(p);
+            });
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+            
+            // Update active mutation visuals from python state
+            document.getElementById("mutated-prompt-display").textContent = statusData.prompt;
+            document.getElementById("active-mutation-score").textContent = `Score: ${statusData.score}/100`;
+            
+            // Re-render graphs dynamically as data streams in
+            if (statusData.score > 56 && researchHistory.indexOf(statusData.score) === -1) {
+                researchHistory.push(statusData.score);
+                renderSVGChart();
+            }
+            
+            if (statusData.status === "idle") {
+                clearInterval(pollingInterval);
+                document.getElementById("research-status").textContent = "OPTIMIZED";
+                document.getElementById("research-status").style.color = "var(--accent)";
+                document.getElementById("run-research-btn").disabled = false;
+                
+                await renderLeaderboard();
+                await renderSVGChart();
+            }
+        } catch (e) {
+            clearInterval(pollingInterval);
+            console.error("Error polling backend logs.", e);
+        }
+    }, 1500);
+}
+
+// Simulated mock execution
+function runAutoResearchMockLoop() {
     if (isResearching) return;
     isResearching = true;
     
@@ -544,7 +640,6 @@ function runAutoResearchLoop() {
     status.textContent = "RUNNING";
     status.style.color = "var(--accent-blue)";
     
-    // Clear history to update dynamically
     researchHistory = [];
     renderSVGChart();
     
@@ -552,43 +647,33 @@ function runAutoResearchLoop() {
     
     function startNextRun() {
         if (runIndex >= researchIterations.length) {
-            // Finished loop
-            setTimeout(() => {
+            setTimeout(async () => {
                 status.textContent = "OPTIMIZED";
                 status.style.color = "var(--accent)";
                 researchBtn.disabled = false;
                 isResearching = false;
                 
-                // Update final leaderboard databases
-                const evals = getEvaluations();
+                const evals = await getEvaluations();
                 const mutatedEvals = evals.filter(e => e.version === "Snapshot v1.1 (Day 2 Reflexion)");
                 mutatedEvals.forEach(e => {
-                    // Update all to 100 to show complete improvement
-                    e.A = 100;
-                    e.S = 100;
-                    e.P = 100;
-                    e.R = 100;
-                    e.C = 100;
+                    e.A = 100; e.S = 100; e.P = 100; e.R = 100; e.C = 100;
                 });
                 saveEvaluations(evals);
-                renderLeaderboard();
+                await renderLeaderboard();
             }, 1000);
             return;
         }
         
         const iteration = researchIterations[runIndex];
         
-        // Print logs step by step
         let logIndex = 0;
         consoleBox.innerHTML += `<p style="color: var(--accent-blue); font-weight: bold; margin-top: 15px;">&gt; INITIALIZING ${iteration.run}...</p>`;
         
         function printLogs() {
             if (logIndex >= iteration.logs.length) {
-                // Completed this iteration's runs
                 researchHistory.push(iteration.score);
                 renderSVGChart();
                 
-                // Update mutated prompt display box
                 promptDisplay.textContent = iteration.prompt;
                 mutationTag.textContent = iteration.run.replace("Configuration", "").replace("Reflexion: ", "");
                 mutationScore.textContent = `Score: ${iteration.score}/100`;
@@ -608,7 +693,7 @@ function runAutoResearchLoop() {
                 
                 logIndex++;
                 printLogs();
-            }, 600); // Speed up logs printing for research
+            }, 600);
         }
         
         printLogs();
@@ -618,7 +703,7 @@ function runAutoResearchLoop() {
 }
 
 // Handle Manual Logging Form Submit
-function handleFormSubmit(e) {
+async function handleFormSubmit(e) {
     e.preventDefault();
     
     const version = document.getElementById("eval-version").value;
@@ -629,7 +714,7 @@ function handleFormSubmit(e) {
     const R = document.getElementById("score-retrieval").value;
     const C = document.getElementById("score-safety").value;
     
-    const evals = getEvaluations();
+    const evals = await getEvaluations();
     
     const existingIndex = evals.findIndex(entry => entry.version === version && entry.caseId === caseId);
     if (existingIndex !== -1) {
@@ -640,8 +725,8 @@ function handleFormSubmit(e) {
     
     saveEvaluations(evals);
     
-    renderLeaderboard();
-    renderSVGChart();
+    await renderLeaderboard();
+    await renderSVGChart();
     
     const consoleOutput = document.getElementById("console-output");
     consoleOutput.innerHTML = `
@@ -659,13 +744,13 @@ function handleFormSubmit(e) {
 }
 
 // Reset Arena Database to original states
-function resetDatabase() {
+async function resetDatabase() {
     if (confirm("Are you sure you want to reset the Arena database to default defaults? This will wipe your logged metrics.")) {
         localStorage.removeItem("arena_evaluations");
         researchHistory = [56, 68, 77, 92, 100];
         
-        renderLeaderboard();
-        renderSVGChart();
+        await renderLeaderboard();
+        await renderSVGChart();
         
         const consoleOutput = document.getElementById("console-output");
         consoleOutput.innerHTML = `<p class="console-meta">&gt; DATABASE RESTORED TO DEFAULT CONFIGURATIONS.</p>`;
@@ -676,15 +761,33 @@ function resetDatabase() {
     }
 }
 
+// Detect and verify live local python server connection on load
+async function checkBackendConnection() {
+    try {
+        const response = await fetch(`${SERVER_URL}/api/status`);
+        if (response.ok) {
+            isLiveServerMode = true;
+            document.querySelector(".system-status").textContent = "SYS.LOC: ONLINE // AUTO_RESEARCH: SERVER MODE";
+            document.querySelector(".system-status").style.color = "var(--accent)";
+            console.log("[Arena API] Live python backend server connected successfully on port 8080.");
+        }
+    } catch (e) {
+        // Keep simulation/localStorage active
+        document.querySelector(".system-status").textContent = "SYS.LOC: ONLINE // AUTO_RESEARCH: SIMULATOR MODE";
+        console.log("[Arena API] Local python server offline. Running in simulation fallback mode.");
+    }
+}
+
 // Event Listeners Initialization
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     populateSelects();
-    renderLeaderboard();
-    renderSVGChart();
+    await checkBackendConnection();
+    await renderLeaderboard();
+    await renderSVGChart();
     renderReflections();
     
     document.getElementById("run-test-btn").addEventListener("click", runTestSimulation);
     document.getElementById("reset-db-btn").addEventListener("click", resetDatabase);
     document.getElementById("grading-form").addEventListener("submit", handleFormSubmit);
-    document.getElementById("run-research-btn").addEventListener("click", runAutoResearchLoop);
+    document.getElementById("run-research-btn").addEventListener("click", triggerAutoResearch);
 });
