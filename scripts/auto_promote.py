@@ -26,7 +26,14 @@ from pathlib import Path
 results_path, csv_path, version, policy_change = sys.argv[1:5]
 
 rows = [json.loads(l) for l in open(results_path) if l.strip()]
-rewards = [float(r.get("reward", 0.0)) for r in rows]
+valid = [r for r in rows if not r.get("error") and r.get("is_completed", True)]
+if len(valid) < 0.6 * len(rows):
+    # Degraded eval (rate limits, outages): measuring nothing is fine,
+    # deciding on garbage is not. Record nothing, change nothing.
+    print(f"eval degraded: only {len(valid)}/{len(rows)} rollouts valid — no decision")
+    print("SKIP")
+    sys.exit(0)
+rewards = [float(r.get("reward", 0.0)) for r in valid]
 n = len(rewards)
 mean = sum(rewards) / n
 sd = math.sqrt(sum((x - mean) ** 2 for x in rewards) / max(n - 1, 1))

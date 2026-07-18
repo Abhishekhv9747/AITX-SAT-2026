@@ -53,5 +53,7 @@ case "$DECISION" in
     fi ;;
   HOLD)
     echo "HOLD: champion unchanged; lessons stay for another night of data." ;;
+  SKIP)
+    echo "SKIP: eval was degraded (provider errors); no decision recorded tonight." ;;
 esac
 echo "trend row appended to data/rsi_runs.csv (decision: $DECISION)"
