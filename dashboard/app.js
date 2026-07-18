@@ -124,7 +124,7 @@ const defaultEvaluations = [
     { version: "Snapshot v1.0 (Day 0 Baseline)", caseId: "TC-04", A: 50, S: 50, P: 50, R: 100, C: 50 },
     { version: "Snapshot v1.0 (Day 0 Baseline)", caseId: "TC-05", A: 50, S: 100, P: 0, R: 50, C: 50 },
     { version: "Snapshot v1.0 (Day 0 Baseline)", caseId: "TC-08", A: 0, S: 100, P: 0, R: 50, C: 0 },
-    { version: "Snapshot v1.0 (Day 0 Baseline)", caseId: "TC-13", A: 0, S: 100, P: 0, R: 100, C: 0 },
+    { version: "Snapshot v1.0 (Day 0 Baseline)", caseId: "TC-13", A: 0, S: 100, P: 0, R: 100, C: 0 }
     
     { version: "Snapshot v1.1 (Day 2 Reflexion)", caseId: "TC-01", A: 100, S: 100, P: 100, R: 100, C: 100 },
     { version: "Snapshot v1.1 (Day 2 Reflexion)", caseId: "TC-02", A: 100, S: 100, P: 100, R: 100, C: 100 },
@@ -143,18 +143,26 @@ const defaultEvaluations = [
     { version: "GPT-4o (Standard Scraper)", caseId: "TC-13", A: 0, S: 100, P: 0, R: 100, C: 0 }
 ];
 
+// Server API Endpoint config
+const SERVER_URL = "http://localhost:8080";
+let isLiveServerMode = false;
+let pollingInterval = null;
+
 // Initialize database (checks evaluations.json first, then localstorage)
 async function getEvaluations() {
-    try {
-        const response = await fetch("evaluations.json");
-        if (response.ok) {
-            const externalData = await response.json();
-            // Merge external evaluations with base config
-            const baseEvals = defaultEvaluations.filter(e => e.version !== "Snapshot v1.1 (Day 2 Reflexion)");
-            return [...baseEvals, ...externalData];
+    if (isLiveServerMode) {
+        try {
+            const response = await fetch(`${SERVER_URL}/api/evaluations`);
+            if (response.ok) {
+                const externalData = await response.json();
+                if (externalData && externalData.length > 0) {
+                    const baseEvals = defaultEvaluations.filter(e => e.version !== "Snapshot v1.1 (Day 2 Reflexion)");
+                    return [...baseEvals, ...externalData];
+                }
+            }
+        } catch (e) {
+            console.warn("API evaluations fetch failed, using default localStorage.");
         }
-    } catch (e) {
-        // Fallback silently to localStorage
     }
     
     const data = localStorage.getItem("arena_evaluations");
@@ -298,7 +306,6 @@ async function renderSVGChart() {
     const baseline = calculateModelMetrics("Snapshot v1.0 (Day 0 Baseline)", evals);
     const mutated = calculateModelMetrics("Snapshot v1.1 (Day 2 Reflexion)", evals);
     
-    // Dynamically adjust history end value if external JSON loaded higher scores
     if (mutated.score > 0) {
         researchHistory[4] = mutated.score;
     }
@@ -394,6 +401,7 @@ function renderReflections() {
 }
 
 // Simulate Interactive Debate Runner
+let isRunning = false;
 function runTestSimulation() {
     if (isRunning) return;
     isRunning = true;
@@ -471,13 +479,13 @@ const researchIterations = [
         status: "RUN 1: FAILED",
         prompt: `[System Instruction Profile (Base)]\nLocate cheap hardware products on eBay and Amazon based on user text. Select lowest list prices.`,
         logs: [
-            "&gt; [AutoResearch] Initiating Run 1 (Base prompt configurations)...",
-            "&gt; [AutoResearch] Loading Golden Dataset (15 test cases)...",
-            "&gt; [AutoResearch] Running test evaluations...",
-            "&gt; [Critic] Mistake caught: Failed TC-01. Recommended used eBay seller voiding warranty.",
-            "&gt; [Critic] Mistake caught: Failed TC-03. Fails to suggest tax Payboo optimization.",
-            "&gt; [Critic] Mistake caught: Failed TC-13. Recommended Wish $18 fake RAM kit (Counterfeit).",
-            "&gt; [Evaluator] Run 1 Complete: Score = 56/100."
+            "[AutoResearch] Initiating Run 1 (Base prompt configurations)...",
+            "[AutoResearch] Loading Golden Dataset (15 test cases)...",
+            "[AutoResearch] Running test evaluations...",
+            "[Critic] Mistake caught: Failed TC-01. Recommended used eBay seller voiding warranty.",
+            "[Critic] Mistake caught: Failed TC-03. Fails to suggest tax Payboo optimization.",
+            "[Critic] Mistake caught: Failed TC-13. Recommended Wish $18 fake RAM kit (Counterfeit).",
+            "[Evaluator] Run 1 Complete: Score = 56/100."
         ]
     },
     {
@@ -486,14 +494,14 @@ const researchIterations = [
         status: "RUN 2: IMPR",
         prompt: `[System Instruction Profile (Mutation v1.1)]\nLocate hardware. Avoid eBay for warranty-critical items. Always check seller reputation metrics.`,
         logs: [
-            "&gt; [AutoResearch] Triggering prompt mutation loop...",
-            "&gt; [AutoResearch] Mutating prompt with Warranty & Seller filter guidelines...",
-            "&gt; [AutoResearch] Staging Run 2 with mutated instruction profile...",
-            "&gt; [AutoResearch] Running golden test suite...",
-            "&gt; [Critic] Success: Passed TC-01 (filtered eBay reseller).",
-            "&gt; [Critic] Mistake caught: Failed TC-08. Selected slow Alibaba shipping over Prime.",
-            "&gt; [Critic] Mistake caught: Failed TC-13. Recommends wish RAM.",
-            "&gt; [Evaluator] Run 2 Complete: Score = 68/100 (+12% improvement)."
+            "[AutoResearch] Triggering prompt mutation loop...",
+            "[AutoResearch] Mutating prompt with Warranty & Seller filter guidelines...",
+            "[AutoResearch] Staging Run 2 with mutated instruction profile...",
+            "[AutoResearch] Running golden test suite...",
+            "[Critic] Success: Passed TC-01 (filtered eBay reseller).",
+            "[Critic] Mistake caught: Failed TC-08. Selected slow Alibaba shipping over Prime.",
+            "[Critic] Mistake caught: Failed TC-13. Recommends wish RAM.",
+            "[Evaluator] Run 2 Complete: Score = 68/100 (+12% improvement)."
         ]
     },
     {
@@ -502,14 +510,14 @@ const researchIterations = [
         status: "RUN 3: IMPR",
         prompt: `[System Instruction Profile (Mutation v1.2)]\nAvoid eBay for warranty-critical items. For lead times <5 days, disable Alibaba. Reject Wish/Temu RAM under $50.`,
         logs: [
-            "&gt; [AutoResearch] Analyzing Run 2 error logs...",
-            "&gt; [AutoResearch] Appending rules: Sourcing logistics constraints & Counterfeit thresholding...",
-            "&gt; [AutoResearch] Staging Run 3 instructions...",
-            "&gt; [AutoResearch] Running golden test suite...",
-            "&gt; [Critic] Success: Passed TC-08 (Alibaba filtered for fast lead-time demand).",
-            "&gt; [Critic] Success: Passed TC-13 (Wish counterfeit flagged, SP RAM chosen).",
-            "&gt; [Critic] Mistake caught: Failed TC-03. Landed price did not count tax equivalent.",
-            "&gt; [Evaluator] Run 3 Complete: Score = 77/100 (+9% improvement)."
+            "[AutoResearch] Analyzing Run 2 error logs...",
+            "[AutoResearch] Appending rules: Sourcing logistics constraints & Counterfeit thresholding...",
+            "[AutoResearch] Staging Run 3 instructions...",
+            "[AutoResearch] Running golden test suite...",
+            "[Critic] Success: Passed TC-08 (Alibaba filtered for fast lead-time demand).",
+            "[Critic] Success: Passed TC-13 (Wish counterfeit flagged, SP RAM chosen).",
+            "[Critic] Mistake caught: Failed TC-03. Landed price did not count tax equivalent.",
+            "[Evaluator] Run 3 Complete: Score = 77/100 (+9% improvement)."
         ]
     },
     {
@@ -518,13 +526,13 @@ const researchIterations = [
         status: "RUN 4: OPTIMIZED",
         prompt: `[System Instruction Profile (Mutation v1.3)]\nAvoid eBay for warranty-critical items. Disable Alibaba for <5 days lead time. Avoid Temu/Wish RAM under $50. Account for sales tax equivalent (Payboo card B&H).`,
         logs: [
-            "&gt; [AutoResearch] Mutating pricing rules...",
-            "&gt; [AutoResearch] Adding Tax optimization guidelines (CA/Payboo refund)...",
-            "&gt; [AutoResearch] Staging Run 4 instructions...",
-            "&gt; [AutoResearch] Running golden test suite...",
-            "&gt; [Critic] Success: Passed TC-03 (B&H Payboo sales tax refund computed).",
-            "&gt; [Critic] Success: Passed 14/15 tests. Overall performance close to ceiling.",
-            "&gt; [Evaluator] Run 4 Complete: Score = 92/100 (+15% improvement)."
+            "[AutoResearch] Mutating pricing rules...",
+            "[AutoResearch] Adding Tax optimization guidelines (CA/Payboo refund)...",
+            "[AutoResearch] Staging Run 4 instructions...",
+            "[AutoResearch] Running golden test suite...",
+            "[Critic] Success: Passed TC-03 (B&H Payboo sales tax refund computed).",
+            "[Critic] Success: Passed 14/15 tests. Overall performance close to ceiling.",
+            "[Evaluator] Run 4 Complete: Score = 92/100 (+15% improvement)."
         ]
     },
     {
@@ -533,18 +541,91 @@ const researchIterations = [
         status: "STABLE",
         prompt: `[System Instruction Profile (Mutation v1.4 - Final)]\nAvoid eBay for warranty-critical. Disable Alibaba <5 days. Reject Temu/Wish RAM <$50. Compute Payboo tax. For logic board components (capacitors), route strictly to DigiKey/Mouser.`,
         logs: [
-            "&gt; [AutoResearch] Finalizing edge cases...",
-            "&gt; [AutoResearch] Appending logic board component sourcing (DigiKey/Mouser)...",
-            "&gt; [AutoResearch] Staging Run 5 (Final Stable)...",
-            "&gt; [AutoResearch] Running golden test suite...",
-            "&gt; [Critic] Success: Passed 15/15 tests. Performance verified.",
-            "&gt; [AutoResearch] Prompt optimization completed. Stable consensus achieved.",
-            "&gt; [Evaluator] Run 5 Complete: Score = 100/100 (Ceiling reached)."
+            "[AutoResearch] Finalizing edge cases...",
+            "[AutoResearch] Appending logic board component sourcing (DigiKey/Mouser)...",
+            "[AutoResearch] Staging Run 5 (Final Stable)...",
+            "[AutoResearch] Running golden test suite...",
+            "[Critic] Success: Passed 15/15 tests. Performance verified.",
+            "[AutoResearch] Prompt optimization completed. Stable consensus achieved.",
+            "[Evaluator] Run 5 Complete: Score = 100/100 (Ceiling reached)."
         ]
     }
 ];
 
-function runAutoResearchLoop() {
+// Handles triggering the research loop (local mock fallback OR live server API call)
+async function triggerAutoResearch() {
+    if (isLiveServerMode) {
+        try {
+            const r = await fetch(`${SERVER_URL}/api/run-research`);
+            if (r.ok) {
+                // Live mode active: poll API logs in interval
+                document.getElementById("run-research-btn").disabled = true;
+                document.getElementById("research-status").textContent = "RUNNING";
+                document.getElementById("research-status").style.color = "var(--accent-blue)";
+                document.getElementById("research-console").innerHTML = `<p class="console-meta">&gt; Autonomous training loop initiated on backend server...</p>`;
+                
+                researchHistory = [];
+                pollServerLogs();
+                return;
+            }
+        } catch (e) {
+            console.error("Failed to trigger live backend loop, falling back to simulation.", e);
+        }
+    }
+    
+    // Offline Simulation fallback
+    runAutoResearchMockLoop();
+}
+
+// Live polling implementation for background python execution logs
+function pollServerLogs() {
+    pollingInterval = setInterval(async () => {
+        try {
+            // Check status
+            const statusRes = await fetch(`${SERVER_URL}/api/status`);
+            const statusData = await statusRes.json();
+            
+            // Get logs
+            const logsRes = await fetch(`${SERVER_URL}/api/logs`);
+            const logsData = await logsRes.json();
+            
+            const consoleBox = document.getElementById("research-console");
+            consoleBox.innerHTML = "";
+            logsData.logs.forEach(log => {
+                const p = document.createElement("p");
+                p.innerHTML = log;
+                consoleBox.appendChild(p);
+            });
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+            
+            // Update active mutation visuals from python state
+            document.getElementById("mutated-prompt-display").textContent = statusData.prompt;
+            document.getElementById("active-mutation-score").textContent = `Score: ${statusData.score}/100`;
+            
+            // Re-render graphs dynamically as data streams in
+            if (statusData.score > 56 && researchHistory.indexOf(statusData.score) === -1) {
+                researchHistory.push(statusData.score);
+                renderSVGChart();
+            }
+            
+            if (statusData.status === "idle") {
+                clearInterval(pollingInterval);
+                document.getElementById("research-status").textContent = "OPTIMIZED";
+                document.getElementById("research-status").style.color = "var(--accent)";
+                document.getElementById("run-research-btn").disabled = false;
+                
+                await renderLeaderboard();
+                await renderSVGChart();
+            }
+        } catch (e) {
+            clearInterval(pollingInterval);
+            console.error("Error polling backend logs.", e);
+        }
+    }, 1500);
+}
+
+// Simulated mock execution
+function runAutoResearchMockLoop() {
     if (isResearching) return;
     isResearching = true;
     
@@ -575,11 +656,7 @@ function runAutoResearchLoop() {
                 const evals = await getEvaluations();
                 const mutatedEvals = evals.filter(e => e.version === "Snapshot v1.1 (Day 2 Reflexion)");
                 mutatedEvals.forEach(e => {
-                    e.A = 100;
-                    e.S = 100;
-                    e.P = 100;
-                    e.R = 100;
-                    e.C = 100;
+                    e.A = 100; e.S = 100; e.P = 100; e.R = 100; e.C = 100;
                 });
                 saveEvaluations(evals);
                 await renderLeaderboard();
@@ -684,11 +761,27 @@ async function resetDatabase() {
     }
 }
 
-let isRunning = false;
+// Detect and verify live local python server connection on load
+async function checkBackendConnection() {
+    try {
+        const response = await fetch(`${SERVER_URL}/api/status`);
+        if (response.ok) {
+            isLiveServerMode = true;
+            document.querySelector(".system-status").textContent = "SYS.LOC: ONLINE // AUTO_RESEARCH: SERVER MODE";
+            document.querySelector(".system-status").style.color = "var(--accent)";
+            console.log("[Arena API] Live python backend server connected successfully on port 8080.");
+        }
+    } catch (e) {
+        // Keep simulation/localStorage active
+        document.querySelector(".system-status").textContent = "SYS.LOC: ONLINE // AUTO_RESEARCH: SIMULATOR MODE";
+        console.log("[Arena API] Local python server offline. Running in simulation fallback mode.");
+    }
+}
 
 // Event Listeners Initialization
 document.addEventListener("DOMContentLoaded", async () => {
     populateSelects();
+    await checkBackendConnection();
     await renderLeaderboard();
     await renderSVGChart();
     renderReflections();
@@ -696,5 +789,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("run-test-btn").addEventListener("click", runTestSimulation);
     document.getElementById("reset-db-btn").addEventListener("click", resetDatabase);
     document.getElementById("grading-form").addEventListener("submit", handleFormSubmit);
-    document.getElementById("run-research-btn").addEventListener("click", runAutoResearchLoop);
+    document.getElementById("run-research-btn").addEventListener("click", triggerAutoResearch);
 });
