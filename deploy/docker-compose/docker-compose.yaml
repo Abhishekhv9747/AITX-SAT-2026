@@ -1,0 +1,46 @@
+# AITX SAT 2026 — GPU-buying agent team, single-host deployment.
+# Adapted from NVIDIA/nemoclaw-community examples/retail-assistant (Apache-2.0).
+# Simplified: hosted NVIDIA Endpoints (no local vLLM/socat), Discord (no
+# Telegram), no database tier.
+
+services:
+  workspace:
+    image: ubuntu:24.04
+    network_mode: host
+    command: ["bash", "/deploy/scripts/startup.sh"]
+    restart: unless-stopped
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+      # NemoClaw non-interactive install (approvals are given by deploying)
+      NEMOCLAW_NON_INTERACTIVE: "1"
+      NEMOCLAW_ACCEPT_THIRD_PARTY_SOFTWARE: "1"
+      NEMOCLAW_YES: "1"
+      NEMOCLAW_PROVIDER: "build"
+      NEMOCLAW_MODEL: ${NEMOCLAW_MODEL:-nvidia/nemotron-3-super-120b-a12b}
+      NEMOCLAW_SANDBOX_NAME: ${NEMOCLAW_SANDBOX_NAME:-openclaw}
+      NEMOCLAW_POLICY_TIER: ${NEMOCLAW_POLICY_TIER:-balanced}
+      NVIDIA_INFERENCE_API_KEY: ${NVIDIA_INFERENCE_API_KEY}
+      # Web search
+      NEMOCLAW_WEB_SEARCH_PROVIDER: ${NEMOCLAW_WEB_SEARCH_PROVIDER:-tavily}
+      TAVILY_API_KEY: ${TAVILY_API_KEY}
+      # Discord
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN}
+      DISCORD_SERVER_ID: ${DISCORD_SERVER_ID}
+      DISCORD_REQUIRE_MENTION: ${DISCORD_REQUIRE_MENTION:-1}
+      # Gateway/dashboard ports (change for multi-stack hosts)
+      NEMOCLAW_GATEWAY_PORT: ${NEMOCLAW_GATEWAY_PORT:-8080}
+      NEMOCLAW_DASHBOARD_PORT: ${NEMOCLAW_DASHBOARD_PORT:-18789}
+      # Shared bin path — must be an identical path on host and container
+      # (gateway binaries are launched via the HOST docker daemon; see the
+      # retail-assistant example's Fix #9 note).
+      NEMOCLAW_BIN_PATH: ${NEMOCLAW_BIN_PATH:-/tmp/nemoclaw-bin}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${NEMOCLAW_BIN_PATH:-/tmp/nemoclaw-bin}:${NEMOCLAW_BIN_PATH:-/tmp/nemoclaw-bin}
+      - ../../config:/deploy/config:ro
+      - ../../identity:/deploy/identity:ro
+      - ./scripts:/deploy/scripts:ro
+      - nemoclaw_home:/root
+
+volumes:
+  nemoclaw_home:
