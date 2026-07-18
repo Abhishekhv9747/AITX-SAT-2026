@@ -1,0 +1,88 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Autoresearch Leaderboard — before / after</title>
+<style>
+:root { --bg:#10151f; --panel:#161d2b; --line:#2a3448; --ink:#e8e6df; --muted:#79839a;
+        --amber:#f0a83c; --cyan:#56b8c8; --good:#6fbf73; }
+@media (prefers-color-scheme: light){ :root{ --bg:#f4f3ee; --panel:#fff; --line:#d6d4cc; --ink:#1c2230; --muted:#7d8698; --amber:#c07d13; --cyan:#22758a; --good:#3d7f4a; } }
+* { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--ink);
+  font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; padding:1.2rem; }
+h1 { font-size:1.25rem; margin:.2rem 0 .1rem; } .sub { color:var(--muted); font-size:.83rem; margin-bottom:1rem; }
+.eyebrow { font-family:ui-monospace,Menlo,monospace; font-size:.66rem; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--amber); }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:1rem; max-width:1100px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:1rem; }
+.card h2 { font-size:.95rem; margin:.1rem 0 .6rem; } canvas { width:100%; height:auto; }
+.stat { display:flex; justify-content:space-between; font-size:.82rem; padding:.22rem 0;
+  border-bottom:1px dashed var(--line); } .stat:last-child{border:none}
+.stat b { font-family:ui-monospace,Menlo,monospace; font-variant-numeric:tabular-nums; }
+.up{color:var(--good)} .flat{color:var(--muted)}
+#log { font-family:ui-monospace,Menlo,monospace; font-size:.72rem; color:var(--muted);
+  max-height:180px; overflow:auto; white-space:pre-wrap; }
+</style>
+<span class="eyebrow">AITX SAT 2026 · autoresearch (karpathy-pattern)</span>
+<h1>Policy Autoresearch — before vs. now</h1>
+<p class="sub">Four objectives: accuracy ↑ · retrieval speed ↑ (lower seconds) · deal safety ↑ (no forbidden-platform picks) · stability ↑ (no regression). Auto-refreshes every 10 s from <code>data/radar_snapshots.json</code>.</p>
+<div class="grid">
+  <div class="card"><h2>Baseline (loop start)</h2><canvas id="before" width="340" height="300"></canvas></div>
+  <div class="card"><h2>Current champion</h2><canvas id="after" width="340" height="300"></canvas></div>
+  <div class="card">
+    <h2>Scoreboard</h2>
+    <div id="stats">loading…</div>
+    <h2 style="margin-top:1rem">Accuracy over cycles</h2>
+    <canvas id="trend" width="320" height="90"></canvas>
+    <h2 style="margin-top:1rem">Recent cycles</h2>
+    <div id="log"></div>
+  </div>
+</div>
+<script>
+const AXES=[["Accuracy",e=>e.accuracy],["Speed",e=>Math.max(0,Math.min(1,5/(e.retrieval_s||5)))],
+            ["Deal safety",e=>(e.deal_safety??100)/100],["Stability",e=>Math.max(0,Math.min(1,1+(e.stability??0)*4))]];
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function radar(cv,entry,color){
+  const c=cv.getContext("2d"),W=cv.width,H=cv.height,cx=W/2,cy=H/2+8,R=Math.min(W,H)/2-46;
+  c.clearRect(0,0,W,H);c.strokeStyle=css("--line");c.fillStyle=css("--muted");c.font="11px system-ui";
+  for(let ring=1;ring<=4;ring++){c.beginPath();for(let i=0;i<=4;i++){const a=-Math.PI/2+i*Math.PI/2,r=R*ring/4;
+    c[i?"lineTo":"moveTo"](cx+r*Math.cos(a),cy+r*Math.sin(a));}c.stroke();}
+  AXES.forEach((ax,i)=>{const a=-Math.PI/2+i*Math.PI/2;
+    c.textAlign=["center","left","center","right"][i];c.fillText(ax[0],cx+(R+12)*Math.cos(a),cy+(R+14)*Math.sin(a));});
+  if(!entry)return;
+  c.beginPath();
+  AXES.forEach((ax,i)=>{const a=-Math.PI/2+i*Math.PI/2,r=R*Math.max(.02,ax[1](entry));
+    c[i?"lineTo":"moveTo"](cx+r*Math.cos(a),cy+r*Math.sin(a));});
+  c.closePath();c.globalAlpha=.25;c.fillStyle=color;c.fill();c.globalAlpha=1;
+  c.strokeStyle=color;c.lineWidth=2;c.stroke();
+  AXES.forEach((ax,i)=>{const a=-Math.PI/2+i*Math.PI/2,r=R*Math.max(.02,ax[1](entry));
+    c.beginPath();c.arc(cx+r*Math.cos(a),cy+r*Math.sin(a),3.5,0,7);c.fillStyle=color;c.fill();});
+}
+function trend(cv,hist){
+  const c=cv.getContext("2d"),W=cv.width,H=cv.height;c.clearRect(0,0,W,H);
+  const pts=hist.map(e=>e.accuracy);if(!pts.length)return;
+  const min=Math.min(...pts,0.3),max=Math.max(...pts,0.8);
+  c.strokeStyle=css("--cyan");c.lineWidth=2;c.beginPath();
+  pts.forEach((v,i)=>{const x=8+(W-16)*i/Math.max(1,pts.length-1),y=H-8-(H-16)*(v-min)/(max-min||1);
+    c[i?"lineTo":"moveTo"](x,y);});c.stroke();
+  const last=pts[pts.length-1],x=8+(W-16),y=H-8-(H-16)*(last-min)/(max-min||1);
+  c.beginPath();c.arc(x-0.01,y,4,0,7);c.fillStyle=css("--amber");c.fill();
+}
+async function refresh(){
+  let hist=[];
+  try{ hist=await (await fetch("../data/radar_snapshots.json?t="+Date.now())).json(); }catch(e){}
+  if(!hist.length){document.getElementById("stats").textContent="no snapshots yet — loop warming up";return;}
+  const before=hist[0], champs=hist.filter(e=>e.role==="champion"), after=champs[champs.length-1]||before;
+  radar(document.getElementById("before"),before,css("--muted"));
+  radar(document.getElementById("after"),after,css("--amber"));
+  trend(document.getElementById("trend"),hist);
+  const d=(a,b,inv)=>{const x=(a-b)*(inv?-1:1);return `<span class="${x>0?'up':'flat'}">${x>0?"▲":x<0?"▼":"–"} ${Math.abs(x).toFixed(3)}</span>`;};
+  document.getElementById("stats").innerHTML=
+    `<div class="stat"><span>Accuracy</span><b>${before.accuracy} → ${after.accuracy} ${d(after.accuracy,before.accuracy)}</b></div>
+     <div class="stat"><span>Retrieval (s)</span><b>${before.retrieval_s} → ${after.retrieval_s} ${d(after.retrieval_s,before.retrieval_s,1)}</b></div>
+     <div class="stat"><span>Deal safety (%)</span><b>${before.deal_safety} → ${after.deal_safety} ${d(after.deal_safety,before.deal_safety)}</b></div>
+     <div class="stat"><span>Cycles run</span><b>${hist.length-1}</b></div>
+     <div class="stat"><span>Promotions</span><b>${champs.length-1}</b></div>`;
+  document.getElementById("log").textContent=hist.slice(-8).reverse().map(e=>
+    `${e.ts}  ${e.version.padEnd(10)} acc=${e.accuracy} lat=${e.retrieval_s}s safety=${e.deal_safety}% ${e.accepted===undefined?"(baseline)":e.accepted?"PROMOTED":"rejected"}`).join("\n");
+}
+refresh(); setInterval(refresh,10000);
+</script>
