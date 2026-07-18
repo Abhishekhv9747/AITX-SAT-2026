@@ -16,10 +16,19 @@ if ! command -v nemoclaw >/dev/null 2>&1; then
   bash /tmp/nemoclaw-installer.sh --non-interactive --yes-i-accept-third-party-software
 fi
 
+# Fix #9 (see retail-assistant example): the gateway launches the sandbox via
+# the HOST docker daemon, mounting openshell binaries from NEMOCLAW_BIN_PATH —
+# an identical host/container path. The installer drops them in /usr/local/bin,
+# so copy them into the shared path or the sandbox container cannot start
+# ("openshell-sandbox: is a directory").
+mkdir -p "$NEMOCLAW_BIN_PATH"
+cp -f /usr/local/bin/openshell* "$NEMOCLAW_BIN_PATH/" 2>/dev/null || true
+ls -la "$NEMOCLAW_BIN_PATH"
+
 echo "[startup] onboarding sandbox '$NEMOCLAW_SANDBOX_NAME' with agent team"
 nemoclaw onboard --agents /deploy/config/agents.yaml || {
-  echo "[startup] onboard failed; retrying with --resume"
-  nemoclaw onboard --resume
+  echo "[startup] onboard failed; retrying with --fresh"
+  nemoclaw onboard --fresh --agents /deploy/config/agents.yaml
 }
 
 echo "[startup] injecting identity layer"
