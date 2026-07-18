@@ -41,7 +41,7 @@ python3 scripts/verifiers_to_rsi_csv.py "$RESULTS" \
   --policy-change "$POLICY_CHANGE" \
   --teacher-model Nemotron \
   --accepted false \
-  --current true
+  --current false
 
 echo "[rsi] appended to data/rsi_runs.csv — dashboard 'Refresh history' will show it."
 echo "[rsi] promote by re-running verifiers_to_rsi_csv.py with --accepted true after review."

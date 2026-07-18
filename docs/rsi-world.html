@@ -1,0 +1,308 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The RSI World — how your agents learn</title>
+<style>
+:root {
+  --ground:#10151f; --panel:#161d2b; --panel-2:#1b2333; --line:#2a3448;
+  --ink:#e8e6df; --ink-2:#aab2c2; --muted:#79839a;
+  --amber:#f0a83c; --cyan:#56b8c8; --good:#6fbf73; --bad:#d96b5b;
+  --chip:#232c40;
+}
+@media (prefers-color-scheme: light) {
+  :root:where(:not([data-theme="dark"])) {
+    --ground:#f4f3ee; --panel:#ffffff; --panel-2:#eceaf1; --line:#d6d4cc;
+    --ink:#1c2230; --ink-2:#43506b; --muted:#7d8698;
+    --amber:#c07d13; --cyan:#22758a; --good:#3d7f4a; --bad:#b0432f;
+    --chip:#e7e5da;
+  }
+}
+:root[data-theme="light"] {
+  --ground:#f4f3ee; --panel:#ffffff; --panel-2:#eceaf1; --line:#d6d4cc;
+  --ink:#1c2230; --ink-2:#43506b; --muted:#7d8698;
+  --amber:#c07d13; --cyan:#22758a; --good:#3d7f4a; --bad:#b0432f;
+  --chip:#e7e5da;
+}
+:root[data-theme="dark"] {
+  --ground:#10151f; --panel:#161d2b; --panel-2:#1b2333; --line:#2a3448;
+  --ink:#e8e6df; --ink-2:#aab2c2; --muted:#79839a;
+  --amber:#f0a83c; --cyan:#56b8c8; --good:#6fbf73; --bad:#d96b5b;
+  --chip:#232c40;
+}
+* { box-sizing:border-box; }
+html,body { margin:0; }
+body {
+  background:var(--ground); color:var(--ink);
+  font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+.mono { font-family:ui-monospace,"SF Mono","Cascadia Code",Menlo,monospace; }
+header {
+  display:flex; flex-wrap:wrap; align-items:baseline; gap:.5rem 1.25rem;
+  padding:1.1rem 1.4rem .9rem; border-bottom:1px solid var(--line);
+}
+header h1 { font-size:1.35rem; margin:0; font-weight:650; letter-spacing:-.01em; }
+header .sub { color:var(--muted); font-size:.85rem; }
+.eyebrow {
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  font-size:.68rem; letter-spacing:.14em; text-transform:uppercase; color:var(--amber);
+}
+#tourBtn {
+  margin-left:auto; background:var(--amber); color:#141414; border:none; cursor:pointer;
+  font:600 .85rem/1 system-ui; padding:.6rem .95rem; border-radius:4px;
+}
+#tourBtn:focus-visible, .node:focus-visible, .chip:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+.wrap { display:grid; grid-template-columns: 1fr 380px; min-height:calc(100vh - 62px); }
+@media (max-width: 980px){ .wrap { grid-template-columns:1fr; } aside { border-left:none!important; border-top:1px solid var(--line);} }
+
+/* ---- the map ---- */
+#world { position:relative; padding:1.4rem; overflow-x:auto; }
+#map { position:relative; min-width:820px; }
+svg#wires { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.districts { position:relative; display:grid; grid-template-columns:repeat(4,1fr); gap:1.1rem; }
+.district { border:1px solid var(--line); border-radius:8px; background:var(--panel); padding: .9rem .8rem 1rem; }
+.district > .eyebrow { display:block; margin-bottom:.15rem; }
+.district > .dname { font-weight:650; margin:0 0 .2rem; font-size:1.02rem; }
+.district > .dsub { color:var(--muted); font-size:.76rem; margin:0 0 .8rem; }
+.nodes { display:flex; flex-direction:column; gap:.55rem; }
+.node {
+  text-align:left; width:100%; cursor:pointer; border:1px solid var(--line);
+  background:var(--panel-2); color:var(--ink); border-radius:6px; padding:.55rem .65rem;
+  font:inherit; transition:border-color .15s, transform .15s;
+}
+.node:hover { border-color:var(--cyan); }
+.node.active { border-color:var(--amber); box-shadow:0 0 0 1px var(--amber); }
+.node .t { font-weight:600; font-size:.88rem; display:flex; align-items:center; gap:.45rem; }
+.node .d { color:var(--muted); font-size:.74rem; margin-top:.1rem; }
+.dot { width:8px; height:8px; border-radius:50%; background:var(--cyan); flex:none; }
+.dot.amber{ background:var(--amber);} .dot.good{ background:var(--good);} .dot.bad{ background:var(--bad);}
+.pulse { position:absolute; width:7px; height:7px; border-radius:50%; background:var(--amber); box-shadow:0 0 8px var(--amber); pointer-events:none; z-index:3; }
+.pulse.cyan { background:var(--cyan); box-shadow:0 0 8px var(--cyan); }
+
+/* ---- dossier ---- */
+aside { border-left:1px solid var(--line); background:var(--panel); padding:1.2rem 1.3rem 2rem; }
+aside .eyebrow { color:var(--cyan); }
+#dTitle { margin:.15rem 0 .6rem; font-size:1.15rem; font-weight:650; letter-spacing:-.01em; text-wrap:balance; }
+#dBody { font-size:.92rem; color:var(--ink-2); max-width:38rem; }
+#dBody p { margin:.6rem 0; }
+#dBody .you {
+  border-left:3px solid var(--amber); padding:.5rem .7rem; margin:.8rem 0;
+  background:color-mix(in srgb, var(--amber) 7%, transparent); border-radius:0 4px 4px 0;
+  color:var(--ink); font-size:.87rem;
+}
+#dBody .you b { color:var(--amber); font-weight:650; }
+#dBody code { font-family:ui-monospace,"SF Mono",Menlo,monospace; font-size:.8em; background:var(--chip); padding:.1em .35em; border-radius:3px; }
+.chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:1rem; }
+.chip {
+  border:1px solid var(--line); background:var(--chip); color:var(--ink-2); cursor:pointer;
+  font:600 .72rem/1 system-ui; padding:.42rem .6rem; border-radius:99px;
+}
+.chip:hover { border-color:var(--cyan); color:var(--ink); }
+#tourBox { margin-top:1.1rem; border-top:1px dashed var(--line); padding-top:.9rem; display:none; }
+#tourBox.on { display:block; }
+#tourStep { font-size:.8rem; color:var(--muted); }
+#tourText { font-size:.9rem; color:var(--ink); margin:.35rem 0 .7rem; }
+#tourBox button {
+  background:var(--chip); color:var(--ink); border:1px solid var(--line); border-radius:4px;
+  font:600 .8rem/1 system-ui; padding:.5rem .8rem; cursor:pointer; margin-right:.4rem;
+}
+.score { font-family:ui-monospace,"SF Mono",Menlo,monospace; font-variant-numeric:tabular-nums; }
+@media (prefers-reduced-motion: reduce){ .pulse { display:none; } }
+</style>
+
+<header>
+  <div>
+    <span class="eyebrow">AITX SAT 2026 · Field Guide</span>
+    <h1>The RSI World</h1>
+  </div>
+  <span class="sub">How your agents talk, remember, get graded, and improve — click anything on the map.</span>
+  <button id="tourBtn">▶ Follow one message</button>
+</header>
+
+<div class="wrap">
+<div id="world"><div id="map">
+  <svg id="wires" aria-hidden="true"></svg>
+  <div class="districts">
+
+    <div class="district" id="D1">
+      <span class="eyebrow">District 01</span>
+      <p class="dname">Discord</p>
+      <p class="dsub">Where humans talk — and every reaction becomes a grade.</p>
+      <div class="nodes">
+        <button class="node" data-k="channels"><span class="t"><span class="dot"></span>#gpu-desk · #daily</span><span class="d">your channels — requests in, digests out</span></button>
+        <button class="node" data-k="bots"><span class="t"><span class="dot"></span>@Brain @Scout @Inspector @Concierge</span><span class="d">four bot identities, one sandbox</span></button>
+        <button class="node" data-k="reactions"><span class="t"><span class="dot good"></span>👍 / 👎 reactions</span><span class="d">the reward signal</span></button>
+      </div>
+    </div>
+
+    <div class="district" id="D2">
+      <span class="eyebrow">District 02</span>
+      <p class="dname">The Sandbox</p>
+      <p class="dsub">A locked room on EC2 where nine agents think and delegate.</p>
+      <div class="nodes">
+        <button class="node" data-k="sandbox"><span class="t"><span class="dot amber"></span>OpenShell sandbox</span><span class="d">every network call inspected</span></button>
+        <button class="node" data-k="agents"><span class="t"><span class="dot"></span>9 agents, 1 orchestrator</span><span class="d">Brain delegates; specialists stay in lane</span></button>
+        <button class="node" data-k="internal"><span class="t"><span class="dot"></span>internal-only agents</span><span class="d">amazon · ebay · tech · speculator · sage</span></button>
+        <button class="node" data-k="crons"><span class="t"><span class="dot amber"></span>the two night shifts</span><span class="d">8:00 digest · midnight memory</span></button>
+      </div>
+    </div>
+
+    <div class="district" id="D3">
+      <span class="eyebrow">District 03</span>
+      <p class="dname">Memory</p>
+      <p class="dsub">Where a day of conversations becomes tomorrow's judgment.</p>
+      <div class="nodes">
+        <button class="node" data-k="episodes"><span class="t"><span class="dot"></span>episodes.jsonl</span><span class="d">one record per interaction</span></button>
+        <button class="node" data-k="lessons"><span class="t"><span class="dot amber"></span>MEMORY.md lessons</span><span class="d">≤30 bullets, loaded every morning</span></button>
+        <button class="node" data-k="verbalrl"><span class="t"><span class="dot"></span>verbal RL (Reflexion)</span><span class="d">improving without touching weights</span></button>
+      </div>
+    </div>
+
+    <div class="district" id="D4">
+      <span class="eyebrow">District 04</span>
+      <p class="dname">The Proving Grounds</p>
+      <p class="dsub">Where claims of improvement go to be tested.</p>
+      <div class="nodes">
+        <button class="node" data-k="golden"><span class="t"><span class="dot"></span>golden dataset</span><span class="d">15 frozen exam questions</span></button>
+        <button class="node" data-k="verifiers"><span class="t"><span class="dot amber"></span>verifiers + vf-eval</span><span class="d">rollouts, rubric, reward</span></button>
+        <button class="node" data-k="trend"><span class="t"><span class="dot good"></span>the trend line</span><span class="d">baseline: <span class="score">0.551 ± 0.050</span></span></button>
+        <button class="node" data-k="training"><span class="t"><span class="dot bad"></span>SFT · DPO · GRPO</span><span class="d">when lessons become weights</span></button>
+      </div>
+    </div>
+
+  </div>
+</div></div>
+
+<aside>
+  <span class="eyebrow" id="dKicker">Dossier</span>
+  <h2 id="dTitle">Welcome to your world</h2>
+  <div id="dBody">
+    <p>Everything on this map is real and running right now: the Discord server, the EC2 sandbox, the nightly jobs, the measured baseline. Click any node to learn what it is and what it does <em>in your system</em> — or press <b>Follow one message</b> to watch a single request travel the whole loop.</p>
+    <p class="you"><b>The one-sentence version:</b> your agents chat with people, write down what worked, re-read those notes tomorrow, and get re-examined on the same 15 questions — so improvement is <em>measured</em>, never assumed. That loop is RSI: recursive self-improvement.</p>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div id="tourBox">
+    <div id="tourStep"></div>
+    <div id="tourText"></div>
+    <button id="tPrev">← Back</button><button id="tNext">Next →</button><button id="tEnd">End tour</button>
+  </div>
+</aside>
+</div>
+
+<script>
+const D = {
+channels:["Discord channels","Where work arrives and results land.",
+`<p>Channels are just chat rooms, but you gave each one a job: <code>#gpu-desk</code> is the request desk, <code>#daily</code> receives the morning price digest, and each agent has a work channel. Because agents only answer when @mentioned, channels stay quiet until someone actually wants something.</p>
+<p class="you"><b>In your system:</b> ask <code>@Brain watch RTX 5090 daily</code> in #gpu-desk and tomorrow at 8:00 AM Central a digest appears in #daily: best price, where, link, and whether the price is trending up or down.</p>`],
+bots:["The four bot identities","One brain-room, four faces.",
+`<p>Each Discord "bot" is a costume connected to one agent inside the sandbox. A message to @Scout is answered by the scout agent with scout's small fast model and scout's limited tools — not by some generic assistant. This is how role separation stays honest: the identity you address decides the policy that answers.</p>
+<p class="you"><b>In your system:</b> Brain runs the big Nemotron Super model and can delegate to everyone; Scout and Concierge run the cheap Nano model; Inspector runs Super because judging listings needs judgment.</p>`],
+reactions:["Reactions = reward","The cheapest grading system ever built.",
+`<p>Reinforcement learning needs a <em>reward signal</em> — a number that says "that was good" or "that was bad". Yours is a thumbs-up. When someone reacts 👍 to an agent's answer, that interaction is graded good; 👎 grades it bad; a human correcting the agent counts too. No forms, no labeling parties — the grading happens inside the conversation people were already having.</p>
+<p class="you"><b>In your system:</b> the nightly memory job reads these reactions and only writes a "lesson" when a real signal justifies it — the agents are forbidden from grading themselves.</p>`],
+sandbox:["The OpenShell sandbox","A locked room with a guard on the door.",
+`<p>Agents run code and browse the web, which is exactly why you don't run them loose on a machine. The sandbox is a sealed container where every single network request passes a policy check — allowed destinations (Discord, NVIDIA, Tavily) go through and get logged; everything else is denied at the wire. If an agent is ever tricked by a malicious webpage, the blast radius is the walls of the room.</p>
+<p class="you"><b>In your system:</b> it runs on your EC2 box (54.162.99.109), backs itself up and shuts down July 20 at midnight, and cost about $8 total.</p>`],
+agents:["Nine agents, one orchestrator","A small company, not a lone genius.",
+`<p>Instead of one giant do-everything AI, you run a team with an org chart. <b>Brain</b> takes requests and delegates. Discord-facing specialists (Scout finds prices, Inspector vets listings, Concierge talks to you) each carry an allowlist of exactly who they may call and which tools they may touch. Narrow agents are cheaper, easier to trust, and their mistakes are easier to find.</p>
+<p class="you"><b>In your system:</b> the org chart lives in <code>config/agents.yaml</code> — main may call all eight; scout may consult speculator; inspector, amazon and ebay may consult sage; sage may call no one.</p>`],
+internal:["Internal-only agents","Workers with no public face — on purpose.",
+`<p>Five agents (amazon, ebay, tech, speculator, sage) have <em>no Discord identity at all</em>. They can only be reached by other agents, never by a person in chat. Why? They handle retail API credentials, and things holding secrets shouldn't have a public door. Sage — the review-fraud judge — goes further: it has no network tools whatsoever. It judges evidence handed to it and can't be lured anywhere.</p>
+<p class="you"><b>In your system:</b> this is the "who can talk to whom" scaffolding you asked for — enforced in config, not by politeness.</p>`],
+crons:["The two night shifts","Your system works while you sleep.",
+`<p>A <em>cron job</em> is a scheduled task ("cron" = clock). You have two. At <b>midnight Central</b>, the memory shift reads the day's conversations and distills them into episodes and lessons. At <b>8:00 AM Central</b>, the price-watch shift fans out to the specialists, appends today's price to a history file, asks the speculator for the trend, and posts the digest to #daily.</p>
+<p class="you"><b>In your system:</b> both jobs live in the cloud gateway's scheduler (<code>gpu-daily-watch</code>, <code>episodic-memory-synthesis</code>) — your laptop can be closed.</p>`],
+episodes:["episodes.jsonl — episodic memory","A diary, one entry per interaction.",
+`<p><em>Episodic memory</em> means remembering specific events ("Tuesday, someone asked X, we did Y, they reacted Z") rather than general facts. Every night, each meaningful interaction becomes one JSON record: what was asked, which agents handled it, what was delivered, the human feedback, a good/bad/neutral grade, and — only when feedback justifies it — a lesson. Summaries only; never raw transcripts or secrets.</p>
+<p class="you"><b>In your system:</b> the file also feeds two machines downstream: the lesson promoter (next node) and the teacher-model dataset exporter.</p>`],
+lessons:["MEMORY.md — the lesson book","Thirty bullets that change tomorrow's behavior.",
+`<p>Raw episodes are too many to re-read. So durable, general lessons get promoted into a small curated file — capped at 30 bullets, deduplicated, contradictions reconciled. The trick that makes this <em>recursive</em>: agents automatically load this file at the start of every session. Yesterday's mistakes are literally in today's context window.</p>
+<p class="you"><b>In your system:</b> this file is the "policy" being improved. Snapshot it, run the exam with and without it, and the difference is your improvement — provable, not vibes.</p>`],
+verbalrl:["Verbal RL (Reflexion)","Learning without touching a single weight.",
+`<p>Classic RL improves a model by nudging billions of numbers (weights) inside it — expensive, slow, needs GPUs. <em>Verbal</em> reinforcement learning (the Reflexion paper, 2023) gets improvement a cheaper way: convert feedback into written self-notes, store them, and re-read them next time. The model is identical; the behavior isn't. It plateaus eventually — and when it does, you graduate to weight-level training (District 04).</p>
+<p class="you"><b>In your system:</b> this is the loop that's already live tonight. The plateau is when SFT/DPO/GRPO earn their keep.</p>`],
+golden:["The golden dataset","Fifteen exam questions that never change.",
+`<p>A <em>golden dataset</em> is a fixed, hand-checked test set — the same exam given after every change. Yours has 15 GPU-buying scenarios (e.g. "factory-sealed RTX 5080, full warranty, by this weekend"), each with machine-checkable ground truth: which platforms are acceptable, which must be avoided, the latest tolerable delivery. Because it never changes, score movements mean <em>the system</em> changed — not the test.</p>
+<p class="you"><b>In your system:</b> <code>scripts/golden_dataset.json</code>, written by your teammate. Cardinal rule: agents must never memorize it — that's why memory rules exclude benchmark items.</p>`],
+verifiers:["verifiers + vf-eval","The examiner: rollouts, rubric, reward.",
+`<p><b>verifiers</b> is a library for building RL <em>environments</em> — an exam room bundling a dataset (the questions), a <em>rubric</em> (grading functions), and a harness that runs the model on each question. One model attempt at one question is a <em>rollout</em>. The CLI <code>vf-eval</code> runs many rollouts against any OpenAI-compatible endpoint and saves scored results.</p>
+<p class="you"><b>In your system:</b> <code>environments/gpu_deal_judge/</code> is your exam room. The rubric gives 0.4 for avoiding forbidden platforms, 0.3 for the right platform, 0.2 for condition, 0.1 for lead time. Your first real run: 45 rollouts of Nemotron, no memory — mean score <span class="score">0.551</span>.</p>`],
+trend:["The trend line","One honest point so far; the story is the slope.",
+`<p>Every evaluation run becomes one row in <code>data/rsi_runs.csv</code> — version, what changed, score, confidence interval, sample size — and your dashboard draws them as a line. The discipline that keeps it honest: same frozen exam every time, confidence intervals so noise isn't mistaken for progress, and <em>promotion is a human decision</em> — a candidate only becomes the new champion when a person marks it accepted.</p>
+<p class="you"><b>In your system:</b> baseline v1.0 = <span class="score">0.551 ± 0.050</span> (memory OFF, n=45, marked <em>measured</em>). Tomorrow: run the exam with the first night of lessons and watch for the second point.</p>`],
+training:["SFT · DPO · GRPO","When notes-to-self become permanent skill.",
+`<p>Three ways experience becomes <em>weights</em> — permanent changes to a model:</p>
+<p><b>SFT</b> (supervised fine-tuning): show the model good examples — "given this request, this was the right answer" — until imitating them is second nature. Your good episodes become exactly these pairs.</p>
+<p><b>DPO</b> (direct preference optimization): show <em>pairs</em> — a chosen answer and a rejected one for the same kind of task — and teach the model to prefer the winner. Your good/bad episode grades generate these pairs automatically.</p>
+<p><b>GRPO</b> (group-relative policy optimization — the one you asked about): true RL. The model tries each exam question several times, the rollouts are scored by your rubric, and answers scoring above their group's average get reinforced. No hand-written "correct answer" needed — just the grader you already built.</p>
+<p class="you"><b>In your system:</b> <code>scripts/export_teacher_dataset.py</code> emits the SFT + DPO files, and your gpu-deal-judge environment plugs directly into verifiers' GRPO trainer. The "teacher model" is the Nemotron you'd fine-tune this way — future students distill from it.</p>`],
+};
+
+const chipsEl = document.getElementById('chips');
+const order = ["channels","bots","reactions","sandbox","agents","internal","crons","episodes","lessons","verbalrl","golden","verifiers","trend","training"];
+for (const k of order){
+  const b=document.createElement('button'); b.className='chip'; b.textContent=D[k][0].split('—')[0].trim();
+  b.onclick=()=>show(k); chipsEl.appendChild(b);
+}
+function show(k){
+  document.querySelectorAll('.node').forEach(n=>n.classList.toggle('active', n.dataset.k===k));
+  document.getElementById('dKicker').textContent = D[k][1];
+  document.getElementById('dTitle').textContent = D[k][0];
+  document.getElementById('dBody').innerHTML = D[k][2];
+}
+document.querySelectorAll('.node').forEach(n=> n.onclick=()=>show(n.dataset.k));
+
+/* wires between districts */
+const wires = document.getElementById('wires');
+const flows = [["D1","D2"],["D2","D3"],["D3","D4"],["D4","D3"]];
+let paths=[];
+function drawWires(){
+  const map=document.getElementById('map'); const mb=map.getBoundingClientRect();
+  wires.innerHTML=''; wires.setAttribute('viewBox',`0 0 ${mb.width} ${mb.height}`); paths=[];
+  flows.forEach(([a,b],i)=>{
+    const ra=document.getElementById(a).getBoundingClientRect(), rb=document.getElementById(b).getBoundingClientRect();
+    const y = ra.top-mb.top + ra.height*(.42 + i*.1);
+    const x1 = ra.right-mb.left, x2 = rb.left-mb.left;
+    const back = x2 < x1;
+    const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+    const midx=(x1+x2)/2, bow = back? 46:-26;
+    p.setAttribute('d',`M ${back?ra.left-mb.left:x1} ${y} C ${midx} ${y+bow}, ${midx} ${y+bow}, ${back?rb.right-mb.left:x2} ${y}`);
+    p.setAttribute('fill','none');
+    p.setAttribute('stroke', back? 'var(--amber)':'var(--cyan)');
+    p.setAttribute('stroke-width','1.4'); p.setAttribute('stroke-dasharray','5 6'); p.setAttribute('opacity','.55');
+    wires.appendChild(p); paths.push(p);
+  });
+}
+/* pulses */
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const pulses=[];
+function mkPulse(pi, speed, cls){ const el=document.createElement('div'); el.className='pulse '+(cls||'');
+  document.getElementById('map').appendChild(el); pulses.push({el,pi,t:Math.random(),speed}); }
+if(!reduced){ mkPulse(0,.0016); mkPulse(1,.0012); mkPulse(2,.0014); mkPulse(3,.0010,'cyan'); mkPulse(0,.0016); mkPulse(2,.0011);
+  requestAnimationFrame(function step(){
+    for(const p of pulses){ p.t=(p.t+p.speed)%1; const path=paths[p.pi]; if(path){ const L=path.getTotalLength(); const pt=path.getPointAtLength(L*p.t);
+      p.el.style.left=(pt.x-3.5)+'px'; p.el.style.top=(pt.y-3.5)+'px'; } }
+    requestAnimationFrame(step);
+  });
+}
+drawWires(); addEventListener('resize', drawWires);
+
+/* guided tour */
+const TOUR=[
+ ["channels","A teammate types in #gpu-desk: “@Brain watch RTX 5090 daily.” The request enters the world."],
+ ["agents","Inside the sandbox, Brain parses it, writes the subscription down, and confirms — delegating price work to Scout and friends."],
+ ["crons","That night at 8:00 AM the price-watch shift runs: specialists fetch prices, the speculator calls the trend, #daily gets its digest."],
+ ["reactions","A human reacts 👍 to the digest. That thumbs-up is now a grade attached to everything that produced it."],
+ ["episodes","At midnight the memory shift files the whole exchange as an episode: request, agents involved, outcome, grade, lesson."],
+ ["lessons","The lesson (“weekend-delivery requests: prefer retailers with 2-day shipping”) is promoted into MEMORY.md. Tomorrow every agent wakes up knowing it."],
+ ["verifiers","To prove it helped, vf-eval re-runs the same 15-question exam with the new lessons injected — 45 rollouts, graded by the rubric."],
+ ["trend","The score lands as a new point next to 0.551. If it's higher — with the confidence interval clear — a human promotes it. That closed loop, running nightly, is recursive self-improvement."]];
+let ti=0; const tb=document.getElementById('tourBox');
+function tShow(){ const [k,txt]=TOUR[ti]; show(k);
+  document.getElementById('tourStep').textContent=`Step ${ti+1} of ${TOUR.length}`;
+  document.getElementById('tourText').textContent=txt;
+  document.getElementById('tPrev').disabled = ti===0;
+  document.getElementById('tNext').textContent = ti===TOUR.length-1 ? 'Finish ✓' : 'Next →'; }
+document.getElementById('tourBtn').onclick=()=>{ tb.classList.add('on'); ti=0; tShow(); };
+document.getElementById('tNext').onclick=()=>{ if(ti<TOUR.length-1){ti++; tShow();} else tb.classList.remove('on'); };
+document.getElementById('tPrev').onclick=()=>{ if(ti>0){ti--; tShow();} };
+document.getElementById('tEnd').onclick=()=>tb.classList.remove('on');
+</script>
