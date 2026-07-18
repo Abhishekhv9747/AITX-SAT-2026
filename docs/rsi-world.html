@@ -46,10 +46,32 @@ header .sub { color:var(--muted); font-size:.85rem; }
   font-size:.68rem; letter-spacing:.14em; text-transform:uppercase; color:var(--amber);
 }
 #tourBtn {
-  margin-left:auto; background:var(--amber); color:#141414; border:none; cursor:pointer;
+  background:var(--amber); color:#141414; border:none; cursor:pointer;
   font:600 .85rem/1 system-ui; padding:.6rem .95rem; border-radius:4px;
 }
-#tourBtn:focus-visible, .node:focus-visible, .chip:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+#quizBtn {
+  margin-left:auto; background:transparent; color:var(--ink); border:1px solid var(--line);
+  cursor:pointer; font:600 .85rem/1 system-ui; padding:.6rem .95rem; border-radius:4px;
+}
+#quizBtn:hover { border-color:var(--cyan); }
+#tourBtn:focus-visible, #quizBtn:focus-visible, .node:focus-visible, .chip:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+/* quiz */
+.q { border:1px solid var(--line); border-radius:6px; padding:.7rem .8rem; margin:.7rem 0; background:var(--panel-2); }
+.q .qt { font-weight:600; font-size:.88rem; margin-bottom:.45rem; color:var(--ink); }
+.q label { display:flex; gap:.5rem; align-items:flex-start; font-size:.84rem; color:var(--ink-2); padding:.28rem .2rem; border-radius:4px; cursor:pointer; }
+.q label:hover { background:color-mix(in srgb, var(--cyan) 8%, transparent); }
+.q input { margin-top:.2rem; accent-color:var(--amber); }
+.q.correct { border-color:var(--good); }
+.q.wrong { border-color:var(--bad); }
+.q .why { display:none; font-size:.8rem; margin-top:.4rem; padding-top:.4rem; border-top:1px dashed var(--line); }
+.q.graded .why { display:block; }
+.q.correct .why { color:var(--good); }
+.q.wrong .why { color:var(--bad); }
+#quizSubmit { background:var(--amber); color:#141414; border:none; cursor:pointer; font:600 .85rem/1 system-ui; padding:.6rem 1rem; border-radius:4px; margin-top:.4rem; }
+#verdict { margin-top:1rem; padding:.8rem .9rem; border-radius:6px; border:1px solid var(--line); background:var(--panel-2); font-size:.9rem; display:none; }
+#verdict.on { display:block; }
+#verdict .big { font-weight:650; font-size:1.02rem; margin-bottom:.3rem; }
+#verdict .weak { margin-top:.5rem; }
 .wrap { display:grid; grid-template-columns: 1fr 380px; min-height:calc(100vh - 62px); }
 @media (max-width: 980px){ .wrap { grid-template-columns:1fr; } aside { border-left:none!important; border-top:1px solid var(--line);} }
 
@@ -114,6 +136,7 @@ aside .eyebrow { color:var(--cyan); }
     <h1>The RSI World</h1>
   </div>
   <span class="sub">How your agents talk, remember, get graded, and improve — click anything on the map.</span>
+  <button id="quizBtn">🎓 Field exam</button>
   <button id="tourBtn">▶ Follow one message</button>
 </header>
 
@@ -305,4 +328,74 @@ document.getElementById('tourBtn').onclick=()=>{ tb.classList.add('on'); ti=0; t
 document.getElementById('tNext').onclick=()=>{ if(ti<TOUR.length-1){ti++; tShow();} else tb.classList.remove('on'); };
 document.getElementById('tPrev').onclick=()=>{ if(ti>0){ti--; tShow();} };
 document.getElementById('tEnd').onclick=()=>tb.classList.remove('on');
+
+/* ---- field exam ---- */
+const QUIZ=[
+ {k:"reactions", q:"In your system today, what is the reward signal that grades an interaction?",
+  o:["A score the agent gives its own answer","👍/👎 reactions and human corrections on Discord","The number of messages in the thread","NVIDIA's API returning HTTP 200"], a:1,
+  why:"Rewards must come from outside the agent — here, humans reacting in the conversation they were already having. Self-grading is explicitly forbidden."},
+ {k:"internal", q:"Why do the amazon, ebay, and sage agents have NO Discord identity?",
+  o:["They aren't finished yet","Discord has a four-bot limit","They handle secrets (or judge evidence) and should have no public door","They only speak JSON"], a:2,
+  why:"Isolation by design: agents holding retail credentials are reachable only via internal delegation, and sage additionally has zero network tools."},
+ {k:"verifiers", q:"What is a rollout?",
+  o:["Deploying a new version to EC2","One model attempt at one task, which then gets scored","A Discord message thread","A nightly backup"], a:1,
+  why:"vf-eval ran 45 rollouts: 15 golden questions × 3 attempts each, every attempt scored by your rubric."},
+ {k:"golden", q:"Why must the golden dataset never end up in the agents' memory?",
+  o:["It's too large to store","It's copyrighted","The file is read-only","If agents memorize exam answers, score gains are leakage, not learning"], a:3,
+  why:"The exam only measures real improvement while it stays unseen. That's why the memory rules explicitly exclude benchmark items."},
+ {k:"lessons", q:"Between two evaluation runs that prove improvement, what is the ONLY thing that changes?",
+  o:["The exam questions","The model's weights","The memory/lessons file injected into the prompt","The rubric weights"], a:2,
+  why:"Same frozen exam, same model, same rubric — memory ON vs OFF isolates the lessons as the cause of any score change."},
+ {k:"training", q:"What does GRPO need that SFT does not?",
+  o:["Hand-written correct answers for every question","Nothing — just a grader; it reinforces attempts that beat their group's average","A bigger golden dataset","Human preference pairs"], a:1,
+  why:"SFT imitates labeled examples; DPO needs chosen/rejected pairs; GRPO only needs your rubric to score multiple attempts and reinforce the above-average ones."},
+ {k:"crons", q:"What happens at midnight Central every night?",
+  o:["The EC2 box shuts down","The daily price digest posts to #daily","Episodic memory synthesis distills the day's chats into episodes and lessons","The benchmark re-runs automatically"], a:2,
+  why:"Midnight = memory shift (episodes.jsonl + MEMORY.md). The 8:00 AM shift is the price digest. The box shutdown is July 20 only."},
+ {k:"trend", q:"Who decides whether a new version becomes the accepted champion on the trend line?",
+  o:["The agent, if its score improves","The CSV adapter script","Anyone who reacts 👍 in Discord","A human, by explicitly marking the run accepted"], a:3,
+  why:"Promotion is deliberately manual (--accepted true). Scripts measure; people decide. That keeps the trend line honest."}
+];
+document.getElementById('quizBtn').onclick=()=>{
+  tb.classList.remove('on');
+  document.getElementById('dKicker').textContent="Operator certification";
+  document.getElementById('dTitle').textContent="The field exam";
+  const body=document.getElementById('dBody');
+  body.innerHTML='<p>Eight questions about the world you just toured. Answer all, then submit — misses point you to the exact districts to restudy.</p>';
+  QUIZ.forEach((it,i)=>{
+    const d=document.createElement('div'); d.className='q'; d.id='q'+i;
+    d.innerHTML='<div class="qt">'+(i+1)+'. '+it.q+'</div>'+
+      it.o.map((o,j)=>'<label><input type="radio" name="q'+i+'" value="'+j+'"><span>'+o+'</span></label>').join('')+
+      '<div class="why"></div>';
+    body.appendChild(d);
+  });
+  const sb=document.createElement('button'); sb.id='quizSubmit'; sb.textContent='Submit answers';
+  const vd=document.createElement('div'); vd.id='verdict';
+  body.appendChild(sb); body.appendChild(vd);
+  sb.onclick=()=>{
+    let score=0; const weak=new Set(); let unanswered=0;
+    QUIZ.forEach((it,i)=>{
+      const el=document.getElementById('q'+i);
+      const pick=el.querySelector('input:checked');
+      el.classList.add('graded');
+      if(!pick){ unanswered++; el.classList.add('wrong'); weak.add(it.k);
+        el.querySelector('.why').textContent='Not answered. '+it.why; return; }
+      if(+pick.value===it.a){ score++; el.classList.remove('wrong'); el.classList.add('correct');
+        el.querySelector('.why').textContent='✓ '+it.why; }
+      else { el.classList.remove('correct'); el.classList.add('wrong'); weak.add(it.k);
+        el.querySelector('.why').textContent='✗ Correct answer: “'+it.o[it.a]+'”. '+it.why; }
+    });
+    vd.classList.add('on');
+    let big, note;
+    if(score===8){ big="8/8 — Certified operator 🎖"; note="You understand the whole loop: signals, isolation, memory, honest measurement, and the three training paths. Go run tomorrow's RSI cycle with confidence."; }
+    else if(score>=6){ big=score+"/8 — Solid, with gaps"; note="You've got the core loop. Before the demo, restudy the flagged districts below — they're the parts judges will ask about."; }
+    else { big=score+"/8 — Not yet, and that's fine"; note="You don't fully understand the setup yet. Take the guided tour again (▶ Follow one message), read the flagged dossiers below, then retake the exam. The system will keep running while you learn it."; }
+    vd.innerHTML='<div class="big">'+big+'</div>'+note+
+      (weak.size? '<div class="weak">Restudy: </div>':'');
+    if(weak.size){ const w=vd.querySelector('.weak');
+      weak.forEach(k=>{ const c=document.createElement('button'); c.className='chip';
+        c.textContent=D[k][0].split('—')[0].trim(); c.onclick=()=>show(k); w.appendChild(c); }); }
+    vd.scrollIntoView({behavior:'smooth',block:'nearest'});
+  };
+};
 </script>
