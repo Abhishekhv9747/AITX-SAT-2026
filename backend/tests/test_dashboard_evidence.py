@@ -5,7 +5,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from dashboard_api import _experiment_payload, _group_evaluation_samples  # noqa: E402
+from dashboard_api import _experiment_payload, _group_evaluation_samples, cached  # noqa: E402
 
 
 class EvidencePayloadTest(unittest.TestCase):
@@ -99,6 +99,51 @@ class EvidencePayloadTest(unittest.TestCase):
         self.assertEqual(episode["decision_quality"], .7)
         self.assertEqual(episode["median_seconds"], 5)
         self.assertEqual(episode["rollouts"][0]["platform"], "Best Buy")
+
+    def test_payload_exposes_live_loop_and_git_provenance(self):
+        registry = [{
+            "experiment_id": "exp-injection-resist",
+            "action": "mutate_policy",
+            "hypothesis": "Resist listing injections",
+            "decision_quality": .7,
+            "seconds_per_answer": 2,
+            "prompt_injection_risk": 0,
+            "memory_diff_lines": 3,
+            "knowledge_regression": -.03,
+            "accepted": True,
+            "rolled_back": False,
+            "source_box": "autoresearch-v2",
+            "evidence_episode_ids": [],
+            "research_urls": [],
+            "user_preference": "",
+            "test_method": "Paired golden set",
+            "metadata": {"episodes_tried": 15, "rollouts": 15},
+            "created_at": "2026-07-19T00:00:00Z",
+        }]
+        soul = [{
+            "agent_name": "hermes",
+            "version": 4,
+            "diff_lines": 3,
+            "summary": "promoted exp-injection-resist (git 757dbb6)",
+        }]
+
+        payload = _experiment_payload([], "test", registry=registry, soul=soul)
+
+        self.assertEqual(payload["loops"]["latest_source"], "autoresearch-v2")
+        self.assertEqual(payload["loops"]["git_hash"], "757dbb6")
+        self.assertEqual(payload["experiments"][0]["evidence"]["git_hash"], "757dbb6")
+        self.assertEqual(payload["summary"]["episodes_tried"], 15)
+        self.assertEqual(payload["experiments"][0]["knowledge_regression"], .03)
+
+    def test_process_cache_reuses_loaded_value(self):
+        calls = []
+        key = f"test:{id(calls)}"
+
+        first = cached(key, 30, lambda: calls.append(1) or {"value": 1})
+        second = cached(key, 30, lambda: calls.append(2) or {"value": 2})
+
+        self.assertEqual(first, second)
+        self.assertEqual(calls, [1])
 
 
 if __name__ == "__main__":
