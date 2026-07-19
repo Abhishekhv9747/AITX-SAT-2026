@@ -1,12 +1,31 @@
+![Decision Frontier whole-system architecture](frontend/media/decision-frontier-whole-system-architecture.png)
+
 # autoresearch
 
 > Daily Discord deal workflow: see [workflow/README.md](workflow/README.md) for
 > the reproducible command-to-cron demo, audit ledger, and recording command.
 >
-> Demo video: [daily Discord deal workflow (MP4)](frontend/media/daily-deals-workflow-demo.mp4)
+> ![Daily Discord deal workflow](frontend/media/daily-deals-workflow-demo.gif)
 >
-> Live Discord/Sage demo: [command-to-#daily result (MP4)](frontend/media/daily-discord-sage-live-demo.mp4)
+> ![Live Discord and Sage command-to-daily result](frontend/media/daily-discord-sage-live-demo.gif)
 
+![Prompt-injection RSI measured across the actual HiddenLayer, policy, and OpenShell safety rollouts](autoresearch/prompt-injection-rsi.png)
+
+The chart is generated directly from the production
+[`/api/autoresearch-experiments`](https://decision-frontier.vercel.app/api/autoresearch-experiments?detail=summary)
+payload, whose source is Supabase `public.harness_experiments`. It plots every
+timestamped `prompt_injection_risk` value and reproduces the dashboard's
+accepted-champion carry-forward logic. Legacy rows contain experiment-level
+metrics but no persisted per-attack samples; the renderer states that caveat on
+the chart. See the [API query](backend/scripts/dashboard_api.py) and
+[Matplotlib renderer](autoresearch/scripts/render_prompt_injection_rsi.py).
+
+The detailed security checks are the [policy eval](autoresearch/scripts/injection_eval.py),
+[boundary study](autoresearch/scripts/injection_boundary_eval.py), and
+[combined gate](autoresearch/scripts/injection_combined_eval.py), with live
+[HiddenLayer](output/infrastructure-proof/06-hiddenlayer-hermes-prompt-injection.png)
+and [OpenShell](output/infrastructure-proof/05-openshell-hermes-policy-denial.png)
+enforcement captures.
 
 *One day, frontier AI research used to be done by meat computers in between eating, sleeping, having other fun, and synchronizing once in a while using sound wave interconnect in the ritual of "group meeting". That era is long gone. Research is now entirely the domain of autonomous swarms of AI agents running across compute cluster megastructures in the skies... This repo is the story of how it all began. —@karpathy, March 2026*
 
@@ -171,11 +190,13 @@ suite. Between promotions, the chart carries the latest measured value.
 
 ![Eleven-step methodology loop](output/playwright/methodology-eleven-step-loop.png)
 
-[Watch the recorded UI walkthrough](frontend/media/rsi-loop-live.mp4)
+![Recorded recursive-intelligence UI walkthrough](frontend/media/rsi-loop-live.gif)
 
 ### Live recursive-intelligence evidence
 
 The screenshots below are from the running infrastructure, not fixtures.
+
+![NemoHermes Discord research results for online and in-store GPU purchase options](frontend/media/nemohermes-discord-research-results.png)
 
 | AutoResearch v2 | Hash-merged Hermes SOUL |
 |---|---|
