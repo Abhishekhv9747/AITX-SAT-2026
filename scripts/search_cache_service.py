@@ -16,10 +16,14 @@ import subprocess
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse, parse_qs
 
-DSN = (f"host={os.environ.get('SUPABASE_POOLER_HOST','aws-0-ca-central-1.pooler.supabase.com')} "
-       f"port=5432 dbname=postgres user={os.environ.get('SUPABASE_POOLER_USER','postgres.qzegmkzyzalmakoqxezc')} "
+def env(name, default=""):
+    # docker --env-file keeps surrounding quotes literally; strip them.
+    return os.environ.get(name, default).strip().strip("'").strip('"')
+
+DSN = (f"host={env('SUPABASE_POOLER_HOST','aws-0-ca-central-1.pooler.supabase.com')} "
+       f"port=5432 dbname=postgres user={env('SUPABASE_POOLER_USER','postgres.qzegmkzyzalmakoqxezc')} "
        f"sslmode=require")
-PW = os.environ["SUPABASE_DB_PW"]
+PW = env("SUPABASE_DB_PW")
 
 
 def slug(s):
