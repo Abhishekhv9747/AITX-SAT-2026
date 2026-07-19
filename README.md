@@ -173,7 +173,7 @@ dedicated injection suite runs. It is not inferred from platform-policy errors.
    changes are versioned in `public.agent_soul`.
 2. The loop writes timestamped summaries to `public.harness_experiments` and
    raw rollout payloads to `public.evaluation_samples`; the Evals API reads only
-   this Supabase history. The generated 84-point demo snapshot is not used.
+   this Supabase history.
 3. Charts connect every measured evaluation by timestamp. Point color marks
    promoted, evaluated, or rolled-back runs; blank metrics stay blank.
 4. Expand an evaluation, then an episode, to inspect its stored prompt and each
@@ -296,12 +296,8 @@ Measured evaluation runs persisted in Supabase:
 Supabase currently contains 90 raw rollout samples. The cloud candidate has no
 raw samples because 34 of its 45 provider calls failed.
 
-The old demo-history generator remains available for isolated design work, but
-its output is never read by the Evals API:
-
-```bash
-python autoresearch/scripts/seed_autoresearch_history.py
-```
+The seed successfully cold-started the dashboard and has now been removed.
+Real ML and RSI evaluation history in Supabase has taken over.
 
 ---
 

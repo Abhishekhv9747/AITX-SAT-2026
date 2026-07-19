@@ -27,7 +27,6 @@ RSI_RUNS_CSV = Path(os.getenv("RSI_RUNS_CSV", ROOT / "autoresearch/data/rsi_runs
 MODEL_METRICS_CSV = Path(os.getenv("MODEL_METRICS_CSV", ROOT / "autoresearch/data/model_metrics.csv"))
 LATEST_RSI_EVAL_JSON = Path(os.getenv("LATEST_RSI_EVAL_JSON", ROOT / "autoresearch/data/latest_rsi_eval.json"))
 LESSONS_FILE = Path(os.getenv("RSI_LESSONS_FILE", ROOT / "autoresearch/data/lessons.md"))
-AUTORESEARCH_EXPERIMENTS = Path(os.getenv("AUTORESEARCH_EXPERIMENTS", ROOT / "autoresearch/data/autoresearch_experiments.json"))
 RADAR_SNAPSHOTS = Path(os.getenv("RADAR_SNAPSHOTS", ROOT / "autoresearch/data/radar_snapshots.json"))
 COORDINATOR_URL = os.getenv(
     "COORDINATOR_URL",
