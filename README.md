@@ -4,10 +4,6 @@
 
 > Daily Discord deal workflow: see [workflow/README.md](workflow/README.md) for
 > the reproducible command-to-cron demo, audit ledger, and recording command.
->
-> ![Daily Discord deal workflow](frontend/media/daily-deals-workflow-demo.gif)
->
-> ![Live Discord and Sage command-to-daily result](frontend/media/daily-discord-sage-live-demo.gif)
 
 ![Prompt-injection RSI measured across the actual HiddenLayer, policy, and OpenShell safety rollouts](autoresearch/prompt-injection-rsi.png)
 
@@ -249,50 +245,7 @@ breaking the whole Evals page.
 
 ---
 
-## Data plane: EC2 → Railway → Vercel
 
-```
- ┌─────────────────────────────┐
- │  EC2 agent host (Terraform) │
- │  backend/infra/terraform    │
- │                             │
- │  docker compose stack       │
- │  • Discord agents / Hermes  │
- │  • autoresearch/scripts/    │
- │    auto_research_           │
- │    loop.py  OR  train.py    │
- │  • nightly RSI / episodes   │
- └──────────────┬──────────────┘
-                │ POST /api/radar
-                │ POST /api/evaluations
-                │ POST /api/episodic-memory
-                │ SQL → episodes / agent_soul / harness_experiments
-                ▼
- ┌─────────────────────────────┐
- │  Railway                    │
- │  Procfile → nemotron_       │
- │  coordinator.py             │
- │                             │
- │  Live JSON:                 │
- │  • /api/radar               │
- │  • /api/evaluations         │
- │  • /api/autoresearch/*      │
- └──────────────┬──────────────┘
-                │ HTTPS fetch
-                ▼
- ┌─────────────────────────────┐     ┌──────────────────────┐
- │  Vercel                     │────▶│  Supabase (hosted)   │
- │  vercel.json                │     │  marketplace rows    │
- │  • frontend/*  (static)     │     │  rsi_runs / episodes │
- │  • backend/api/index.py     │     │  search_cache        │
- │    (serverless)             │     │  harness_experiments │
- │                             │     │  agent_soul          │
- │    /api/marketplace         │     └──────────────────────┘
- │    /api/improvement         │
- │    /api/autoresearch-       │
- │         experiments         │
- └─────────────────────────────┘
-```
 
 ### What each hop does
 
@@ -379,4 +332,4 @@ Real ML and RSI evaluation history in Supabase has taken over.
 
 ## License
 
-TBD · Autoresearch loop pattern inspired by Andrej Karpathy's autoresearch (March 2026).
+MIT
