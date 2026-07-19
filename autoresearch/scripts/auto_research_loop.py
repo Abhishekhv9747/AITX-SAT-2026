@@ -27,7 +27,7 @@ REPO = Path(os.environ.get("REPO_DIR", Path(__file__).resolve().parents[1]))
 
 # Karpathy-root prepare.py is the canonical eval harness.
 # Local copies of score/evaluate below remain as fallbacks if prepare is unavailable.
-SKILL_SCRIPTS = REPO / "skills" / "autoresearch" / "scripts"
+SKILL_SCRIPTS = REPO / "skill" / "scripts"
 sys.path.insert(0, str(SKILL_SCRIPTS))
 
 from evaluate import score_policy, log_result_ml  # noqa: E402

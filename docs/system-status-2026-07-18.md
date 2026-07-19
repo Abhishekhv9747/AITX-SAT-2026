@@ -87,7 +87,7 @@ neutral. No local migration was used.
   evidence only when the coordinator is unavailable.
 - Playwright verified both Leaderboard and Methodology with live data, autoplay,
   zoom/fullscreen controls, and no application JavaScript errors. The new
-  21.5-second recording is `dashboard/media/rsi-05-autoresearch-progress.mp4`.
+  21.5-second recording is `frontend/media/rsi-05-autoresearch-progress.mp4`.
 - `/api/radar`, `/api/autoresearch-status`, `/api/evaluations`, and
   `/api/episodic-memory` are read-only Vercel proxies to Railway.
 

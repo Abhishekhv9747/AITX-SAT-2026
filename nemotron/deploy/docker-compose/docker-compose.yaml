@@ -56,15 +56,17 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      REPO_DIR: /repo
+      # auto_research_loop resolves data/, research/, prepare.py relative to
+      # REPO_DIR — point it at autoresearch/ within the repo mount.
+      REPO_DIR: /repo/autoresearch
       CYCLE_SECS: ${CYCLE_SECS:-300}
       COORDINATOR_URL: ${COORDINATOR_URL:-https://nemoclaw-coordinator-api-production.up.railway.app}
     volumes:
-      - ../..:/repo
+      - ../../..:/repo
     command:
       - sh
       - -c
-      - apt-get update -qq && apt-get install -y -qq git >/dev/null && pip install -q requests && exec python scripts/auto_research_loop.py
+      - apt-get update -qq && apt-get install -y -qq git >/dev/null && pip install -q requests && exec python autoresearch/scripts/auto_research_loop.py
 
 volumes:
   nemoclaw_home:
