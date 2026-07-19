@@ -7,5 +7,10 @@
 design-qa*
 docs
 environments
+benchmarks
+infra
+output
+outputs
+identity
 supabase
 dashboard/demos

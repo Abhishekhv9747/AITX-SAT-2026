@@ -13,3 +13,4 @@ infra/terraform/.terraform.lock.hcl
 output/playwright/
 outputs/
 scripts/nemotron_config.json
+.vercel
