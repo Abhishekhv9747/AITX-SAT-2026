@@ -143,6 +143,13 @@ const metricMeta={
   knowledge_regression:{label:"Agent knowledge regression",format:value=>Number(value).toFixed(4)}
 };
 const measured=value=>value!==null&&value!==undefined&&Number.isFinite(Number(value));
+const evalStatus=exp=>exp.kept||exp.accepted?"PROMOTED":exp.rolled_back?"ROLLED BACK":"EVALUATED";
+const evalTime=value=>{
+  const date=new Date(value);
+  return Number.isNaN(date.valueOf())?String(value||"Unknown time"):new Intl.DateTimeFormat("en-US",{
+    month:"short",day:"numeric",hour:"numeric",minute:"2-digit"
+  }).format(date);
+};
 
 function renderResearchDetail(exp,metric="accuracy",previous=null){
   if(!exp)return;
@@ -153,7 +160,7 @@ function renderResearchDetail(exp,metric="accuracy",previous=null){
   const delta=value!==null&&prior!==null?value-prior:null;
   $("#research-detail-title").textContent=`#${exp.experiment} · ${exp.description||exp.version}`;
   $("#research-detail-decision").textContent=[
-    exp.kept||exp.accepted?"PROMOTED":exp.rolled_back?"ROLLED BACK":"EVALUATED",
+    evalStatus(exp),
     `${meta.label}: ${value===null?"not measured":meta.format(value)}`,
     `Δ ${delta===null?"—":`${delta>=0?"+":""}${meta.format(delta)}`}`
   ].join(" · ");
@@ -167,64 +174,31 @@ function renderResearchDetail(exp,metric="accuracy",previous=null){
   ].filter(Boolean).join(" · ");
 }
 
-/** Timestamped evaluation points with the promoted baseline. */
+/** Connect every measured run; color communicates promotion or rollback. */
 function renderKarpathyChart(canvasId, experiments, metric, opts={}){
   const canvas=$(`#${canvasId}`);
   if(!canvas||!window.Chart)return;
-  let best=null;
-  const running=[], discarded=[], keptPts=[];
-  experiments.forEach(e=>{
-    const value=measured(e[metric])?Number(e[metric]):null;
-    if((e.kept||e.accepted)&&value!==null){
-      best=value;
-      keptPts.push(value);
-      discarded.push(null);
-    }else{
-      keptPts.push(null);
-      discarded.push(value);
-    }
-    running.push(best);
-  });
-  const labels=experiments.map(e=>e.experiment);
+  const values=experiments.map(exp=>measured(exp[metric])?Number(exp[metric]):null);
+  const colors=experiments.map(exp=>exp.rolled_back?"#a64c3c":exp.kept||exp.accepted?"#28754c":"#fffdf7");
+  const borders=experiments.map(exp=>exp.rolled_back?"#a64c3c":exp.kept||exp.accepted?"#28754c":"#171711");
   karpathyCharts[canvasId]?.destroy();
-  const showLabels=!!opts.annotate;
   karpathyCharts[canvasId]=new Chart(canvas,{
     type:"line",
     data:{
-      labels,
-      datasets:[
-        {
-          label:"Evaluated",
-          data:discarded,
-          showLine:false,
-          pointRadius:3,
-          pointHoverRadius:5,
-          pointBackgroundColor:"#c8c4ba",
-          pointBorderWidth:0,
-          order:1
-        },
-        {
-          label:"Promoted",
-          data:keptPts,
-          showLine:false,
-          pointRadius:5.5,
-          pointHoverRadius:7,
-          pointBackgroundColor:"#fffdf7",
-          pointBorderColor:"#28754c",
-          pointBorderWidth:2,
-          order:3
-        },
-        {
-          label:"Promoted baseline",
-          data:running,
-          stepped:"after",
-          borderColor:"#28754c",
-          borderWidth:2.4,
-          pointRadius:0,
-          spanGaps:true,
-          order:2
-        }
-      ]
+      labels:experiments.map(exp=>evalTime(exp.ts)),
+      datasets:[{
+        label:"Measured eval",
+        data:values,
+        borderColor:"#28754c",
+        borderWidth:2.4,
+        pointRadius:6,
+        pointHoverRadius:8,
+        pointBackgroundColor:colors,
+        pointBorderColor:borders,
+        pointBorderWidth:2,
+        spanGaps:true,
+        tension:.18
+      }]
     },
     options:{
       animation:false,
@@ -241,13 +215,13 @@ function renderKarpathyChart(canvasId, experiments, metric, opts={}){
           callbacks:{
             title:items=>{
               const exp=experiments[items[0]?.dataIndex ?? 0];
-              return exp?`#${exp.experiment} · ${exp.ts?.slice(5,16)||exp.version}`:"";
+              return exp?`#${exp.experiment} · ${evalTime(exp.ts)}`:"";
             },
             afterBody:items=>{
               const exp=experiments[items[0]?.dataIndex ?? 0];
               const evidence=exp?.evidence||{};
               return exp?[
-                `${exp.kept||exp.accepted?"PROMOTED":exp.rolled_back?"ROLLED BACK":"EVALUATED"}: ${exp.description}`,
+                `${evalStatus(exp)}: ${exp.description}`,
                 `Evidence: ${evidence.source||"live EC2 research"}`,
                 `Preference: ${(evidence.preference||"none attached").slice(0,90)}`,
                 `Test: ${(evidence.tested_by||"Verifiers golden set").slice(0,90)}`
@@ -262,7 +236,7 @@ function renderKarpathyChart(canvasId, experiments, metric, opts={}){
       },
       scales:{
         x:{
-          title:{display:true,text:"Experiment #",font:{family:"DM Mono",size:10}},
+          title:{display:true,text:"Evaluated at",font:{family:"DM Mono",size:10}},
           grid:{display:false},
           ticks:{font:{family:"DM Mono",size:9},color:"#77736a",maxTicks:10}
         },
@@ -272,29 +246,50 @@ function renderKarpathyChart(canvasId, experiments, metric, opts={}){
           ticks:{font:{family:"DM Mono",size:9},color:"#77736a"}
         }
       }
-    },
-    plugins: showLabels?[{
-      id:"keptLabels",
-      afterDatasetsDraw(chart){
-        const meta=chart.getDatasetMeta(1);
-        const ctx=chart.ctx;
-        ctx.save();
-        ctx.font="9px DM Mono, monospace";
-        ctx.fillStyle="#3d3a32";
-        experiments.forEach((e,i)=>{
-          if(!(e.kept||e.accepted))return;
-          const pt=meta.data[i];
-          if(!pt||pt.skip)return;
-          ctx.save();
-          ctx.translate(pt.x+4, pt.y-4);
-          ctx.rotate(-Math.PI/7);
-          ctx.fillText((e.description||"").slice(0,34),0,0);
-          ctx.restore();
-        });
-        ctx.restore();
-      }
-    }]:[]
+    }
   });
+}
+
+function renderEvalResults(experiments){
+  const host=$("#eval-results");
+  if(!host)return;
+  host.innerHTML=experiments.map((exp,index)=>{
+    const episodes=exp.sample_episodes||[];
+    const status=evalStatus(exp);
+    const episodeRows=episodes.map(episode=>`
+      <details class="episode-result">
+        <summary>
+          <span>Episode ${Number(episode.episode_index)+1}</span>
+          <b>${measured(episode.decision_quality)?Number(episode.decision_quality).toFixed(3):"—"} quality</b>
+          <b>${measured(episode.median_seconds)?`${Number(episode.median_seconds).toFixed(2)}s`:"—"}</b>
+          <i class="fa-solid fa-chevron-down"></i>
+        </summary>
+        <p class="episode-prompt">${esc(episode.prompt)}</p>
+        <div class="rollout-list">
+          ${(episode.rollouts||[]).map(run=>`
+            <div class="rollout-row">
+              <strong>R${esc(run.rollout_number??"—")}</strong>
+              <span>Quality <b>${measured(run.decision_quality)?Number(run.decision_quality).toFixed(3):"—"}</b></span>
+              <span>Time <b>${measured(run.seconds_per_answer)?`${Number(run.seconds_per_answer).toFixed(2)}s`:"—"}</b></span>
+              <span>Platform <b>${esc(run.platform)}</b></span>
+              <span>${esc(run.condition||"condition —")}${run.lead_time_days!=null?` · ${esc(run.lead_time_days)}d`:""}</span>
+            </div>`).join("")}
+        </div>
+      </details>`).join("");
+    const empty=`<p class="eval-results-empty">No raw samples persisted${exp.failed_rollouts?` · ${esc(exp.failed_rollouts)} provider calls failed`:""}.</p>`;
+    return `
+      <details class="eval-result-card" ${index===experiments.length-1?"open":""}>
+        <summary>
+          <span class="eval-result-index">${String(index+1).padStart(2,"0")}</span>
+          <span class="eval-result-name"><strong>${esc(exp.description||exp.version)}</strong><small>${esc(evalTime(exp.ts))}</small></span>
+          <span class="eval-result-count"><b>${esc(exp.episodes_tried||episodes.length)}</b> episodes</span>
+          <span class="eval-result-count"><b>${esc(exp.stored_samples||0)}</b> samples</span>
+          <span class="eval-result-status ${status.toLowerCase().replace(" ","-")}">${status}</span>
+          <i class="fa-solid fa-chevron-down"></i>
+        </summary>
+        <div class="episode-list">${episodeRows||empty}</div>
+      </details>`;
+  }).join("")||'<p class="eval-results-empty">No evaluation evidence stored yet.</p>';
 }
 
 function renderExperiments(payload){
@@ -326,8 +321,9 @@ function renderExperiments(payload){
   renderKarpathyChart("chart-retrieval", exps, "retrieval_s", {yLabel:"Seconds per answer"});
   renderKarpathyChart("chart-injection", exps, "prompt_injection_risk", {yLabel:"Prompt injection risk"});
   renderKarpathyChart("chart-memory", exps, "episodic_diff_lines", {yLabel:"Hermes memory diff lines"});
-  renderKarpathyChart("chart-knowledge", exps, "knowledge_regression", {yLabel:"Agent knowledge regression",annotate:true});
+  renderKarpathyChart("chart-knowledge", exps, "knowledge_regression", {yLabel:"Agent knowledge regression"});
   renderResearchDetail(exps.at(-1),"accuracy",exps.at(-2));
+  renderEvalResults(exps);
 }
 
 async function loadExperiments(){

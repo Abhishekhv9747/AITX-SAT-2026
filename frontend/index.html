@@ -152,11 +152,11 @@
       <div class="karpathy-grid" id="karpathy-grid">
         <article class="panel karpathy-panel">
           <div class="panel-head"><div><p class="eyebrow">01 · Decision quality ↑</p><h2>Decision quality</h2></div><span class="data-badge" id="acc-delta">—</span></div>
-          <div class="karpathy-chart-wrap"><canvas id="chart-accuracy" aria-label="Accuracy staircase"></canvas></div>
+          <div class="karpathy-chart-wrap"><canvas id="chart-accuracy" aria-label="Decision quality across measured evaluations"></canvas></div>
         </article>
         <article class="panel karpathy-panel">
           <div class="panel-head"><div><p class="eyebrow">02 · Seconds per answer ↓</p><h2>Seconds per answer</h2></div><span class="data-badge" id="ret-delta">—</span></div>
-          <div class="karpathy-chart-wrap"><canvas id="chart-retrieval" aria-label="Retrieval time staircase"></canvas></div>
+          <div class="karpathy-chart-wrap"><canvas id="chart-retrieval" aria-label="Seconds per answer across measured evaluations"></canvas></div>
         </article>
         <article class="panel karpathy-panel">
           <div class="panel-head"><div><p class="eyebrow">03 · Prompt injection risk ↓</p><h2>Prompt injection risk</h2></div><span class="data-badge" id="injection-delta">—</span></div>
@@ -168,7 +168,7 @@
         </article>
         <article class="panel karpathy-panel karpathy-wide">
           <div class="panel-head"><div><p class="eyebrow">05 · Knowledge regression ↓</p><h2>Agent knowledge regression</h2></div><span class="data-badge" id="knowledge-delta">—</span></div>
-          <div class="karpathy-chart-wrap tall"><canvas id="chart-knowledge" aria-label="Agent knowledge regression staircase"></canvas></div>
+          <div class="karpathy-chart-wrap tall"><canvas id="chart-knowledge" aria-label="Agent knowledge regression across measured evaluations"></canvas></div>
         </article>
       </div>
 
@@ -185,6 +185,16 @@
           <div><dt><i class="fa-solid fa-flask"></i> How it was tested</dt><dd id="research-detail-test">Verifiers golden set + LLM judge</dd></div>
         </dl>
       </aside>
+
+      <section class="eval-results-section" aria-labelledby="eval-results-title">
+        <div class="eval-results-head">
+          <div><p class="eyebrow">Stored rollout evidence</p><h2 id="eval-results-title">Episodes and rollouts</h2></div>
+          <span class="data-badge"><i class="fa-solid fa-database"></i> Live Supabase</span>
+        </div>
+        <div class="eval-results" id="eval-results">
+          <p class="eval-results-empty">Loading stored evaluation samples…</p>
+        </div>
+      </section>
     </section>
 
     <section class="page methodology" id="methodology-page">

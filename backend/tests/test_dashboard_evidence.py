@@ -5,7 +5,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from dashboard_api import _experiment_payload  # noqa: E402
+from dashboard_api import _experiment_payload, _group_evaluation_samples  # noqa: E402
 
 
 class EvidencePayloadTest(unittest.TestCase):
@@ -70,6 +70,35 @@ class EvidencePayloadTest(unittest.TestCase):
         point = payload["experiments"][0]
         self.assertEqual(point["evidence"]["episode_ids"], [])
         self.assertIn("no explicit evidence link", point["evidence"]["source_detail"])
+
+    def test_samples_are_grouped_by_evaluation_and_episode(self):
+        groups = _group_evaluation_samples([
+            {
+                "evaluation_id": "eval-1",
+                "episode_index": 2,
+                "rollout_number": 1,
+                "decision_quality": .8,
+                "seconds_per_answer": 4,
+                "successful": True,
+                "prompt": "Find a safe GPU.",
+                "response": '{"recommended_platform":"Best Buy","condition":"new","lead_time_days":2}',
+            },
+            {
+                "evaluation_id": "eval-1",
+                "episode_index": 2,
+                "rollout_number": 2,
+                "decision_quality": .6,
+                "seconds_per_answer": 6,
+                "successful": True,
+                "prompt": "Find a safe GPU.",
+                "response": '{"recommended_platform":"Newegg","condition":"new","lead_time_days":3}',
+            },
+        ])
+        episode = groups["eval-1"][0]
+        self.assertEqual(episode["prompt"], "Find a safe GPU.")
+        self.assertEqual(episode["decision_quality"], .7)
+        self.assertEqual(episode["median_seconds"], 5)
+        self.assertEqual(episode["rollouts"][0]["platform"], "Best Buy")
 
 
 if __name__ == "__main__":

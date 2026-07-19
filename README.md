@@ -159,7 +159,9 @@ The five Evals metrics are:
 Prompt-injection risk is intentionally shown as **not measured** until a
 dedicated injection suite runs. It is not inferred from platform-policy errors.
 
-![Live Supabase evidence on the Evals page](output/playwright/evals-real-supabase.png)
+![Connected measured evaluations from Supabase](output/playwright/evals-connected-results.png)
+
+![Expandable episode and rollout evidence](output/playwright/evals-rollout-expanded.png)
 
 ![Eleven-step methodology loop](output/playwright/methodology-eleven-step-loop.png)
 
@@ -172,9 +174,11 @@ dedicated injection suite runs. It is not inferred from platform-policy errors.
 2. The loop writes timestamped summaries to `public.harness_experiments` and
    raw rollout payloads to `public.evaluation_samples`; the Evals API reads only
    this Supabase history. The generated 84-point demo snapshot is not used.
-3. Each hover state shows the agent change, user preference, episodic-memory
-   diff, episodes tried, rollout/sample counts, and judging method.
-4. A kept experiment advances the champion; a discarded branch is retained in
+3. Charts connect every measured evaluation by timestamp. Point color marks
+   promoted, evaluated, or rolled-back runs; blank metrics stay blank.
+4. Expand an evaluation, then an episode, to inspect its stored prompt and each
+   rollout's score, latency, platform, condition, and lead time.
+5. A kept experiment advances the champion; a discarded branch is retained in
    the chart as negative evidence.
 
 ---
@@ -257,6 +261,7 @@ dedicated injection suite runs. It is not inferred from platform-policy errors.
    `backend/scripts/dashboard_api.py`. The Evals page:
    - loads `/api/autoresearch-experiments` exclusively from timestamped
      `harness_experiments` and `evaluation_samples` rows in Supabase
+   - groups raw samples into expandable evaluations, episodes, and rollouts
    - exposes `/api/research-evidence` for the underlying user-feedback records
    - loads marketplace cards from hosted Supabase
    - plays the 11 methodology recordings from `frontend/media/`

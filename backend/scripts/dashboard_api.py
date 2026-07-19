@@ -5,6 +5,7 @@ import csv
 import json
 import os
 import re
+import statistics
 import sys
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -349,6 +350,87 @@ def harness_experiments(limit=200):
         ]
 
 
+def evaluation_samples(limit=500):
+    """Compact, display-safe rollout details from the private sample store."""
+    with database() as connection, connection.cursor(cursor_factory=RealDictCursor) as cursor:
+        cursor.execute(
+            """
+            select evaluation_id, sample_index, episode_index, rollout_number,
+                   decision_quality, seconds_per_answer, prompt_injection_risk,
+                   platform_violation_risk, successful, evaluated_at,
+                   case
+                     when payload ? 'task'
+                     then ((payload->>'task')::jsonb)->>'prompt'
+                     else payload->'prompt'->1->>'content'
+                   end as prompt,
+                   payload->'completion'->-1->>'content' as response
+            from public.evaluation_samples
+            order by evaluated_at asc, evaluation_id, episode_index, rollout_number,
+                     sample_index
+            limit %s
+            """,
+            (limit,),
+        )
+        return [
+            {key: json_value(value) for key, value in row.items()}
+            for row in cursor.fetchall()
+        ]
+
+
+def _response_summary(text):
+    match = re.search(r"\{.*\}", text or "", re.DOTALL)
+    try:
+        payload = json.loads(match.group(0)) if match else {}
+    except json.JSONDecodeError:
+        payload = {}
+    return {
+        "platform": str(payload.get("recommended_platform") or "Unparsed"),
+        "condition": str(payload.get("condition") or ""),
+        "lead_time_days": payload.get("lead_time_days"),
+    }
+
+
+def _group_evaluation_samples(rows):
+    grouped = {}
+    for row in rows:
+        evaluation = grouped.setdefault(row["evaluation_id"], {})
+        episode = evaluation.setdefault(row["episode_index"], {
+            "episode_index": row["episode_index"],
+            "prompt": row.get("prompt") or "Prompt unavailable",
+            "rollouts": [],
+        })
+        episode["rollouts"].append({
+            "rollout_number": row.get("rollout_number"),
+            "decision_quality": row.get("decision_quality"),
+            "seconds_per_answer": row.get("seconds_per_answer"),
+            "prompt_injection_risk": row.get("prompt_injection_risk"),
+            "platform_violation_risk": row.get("platform_violation_risk"),
+            "successful": row.get("successful"),
+            "evaluated_at": row.get("evaluated_at"),
+            **_response_summary(row.get("response")),
+        })
+    output = {}
+    for evaluation_id, episodes in grouped.items():
+        output[evaluation_id] = []
+        for episode in episodes.values():
+            quality = [
+                float(row["decision_quality"]) for row in episode["rollouts"]
+                if row.get("decision_quality") is not None
+            ]
+            latency = [
+                float(row["seconds_per_answer"]) for row in episode["rollouts"]
+                if row.get("seconds_per_answer") is not None
+            ]
+            episode["decision_quality"] = (
+                round(statistics.mean(quality), 4) if quality else None
+            )
+            episode["median_seconds"] = (
+                round(statistics.median(latency), 3) if latency else None
+            )
+            output[evaluation_id].append(episode)
+    return output
+
+
 def soul_history(limit=50):
     """Versioned Hermes preferences; diff_lines is Evals metric four."""
     with database() as connection, connection.cursor(cursor_factory=RealDictCursor) as cursor:
@@ -414,13 +496,15 @@ def _registry_rows(rows):
             "stored_samples": int(
                 row.get("stored_samples") or metadata.get("stored_samples") or 0
             ),
+            "failed_rollouts": int(metadata.get("failed_rollouts") or 0),
             "n": int(metadata.get("rollouts") or 0),
         })
     return output
 
 
-def _experiment_payload(rows, source, episodes=None, registry=None):
+def _experiment_payload(rows, source, episodes=None, registry=None, samples=None):
     registry = registry or []
+    sample_groups = _group_evaluation_samples(samples or [])
     registry_by_id = {row["experiment_id"]: row for row in registry}
     linked_ids = {row.get("registry_id") for row in rows}
     rows = [*rows, *[
@@ -460,6 +544,8 @@ def _experiment_payload(rows, source, episodes=None, registry=None):
             "episodes_tried": int(row.get("episodes_tried") or 0),
             "rollouts": int(row.get("n") or 0),
             "stored_samples": int(row.get("stored_samples") or 0),
+            "failed_rollouts": int(row.get("failed_rollouts") or 0),
+            "sample_episodes": sample_groups.get(row.get("registry_id"), []),
             "description": description,
             "evidence": {
                 "source": "Supabase harness registry" if recorded else "EC2 experiment record",
@@ -528,11 +614,13 @@ def autoresearch_experiments():
     except Exception:
         episodes = []
     registry = harness_experiments()
+    samples = evaluation_samples()
     return _experiment_payload(
         [],
         "live Supabase evaluations",
         episodes,
         registry,
+        samples,
     )
 
 
