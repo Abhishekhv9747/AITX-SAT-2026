@@ -338,7 +338,10 @@ def persist_harness_experiment(entry, champion, candidate, evidence, run_id):
     entry["knowledge_regression"] = max(0, -float(entry.get("stability") or 0))
     episode_array = "array[" + ",".join(_sql_quote(row) for row in episode_ids) + "]::text[]"
     metadata = json.dumps({
+        "provenance": "measured",
+        "episodes_tried": len(GOLDEN),
         "rollouts": entry.get("n", 0),
+        "stored_samples": 0,
         "version": entry["version"],
         "stability": entry.get("stability", 0),
         "policy_diff_lines": policy_diff_lines,
@@ -348,12 +351,13 @@ def persist_harness_experiment(entry, champion, candidate, evidence, run_id):
     _psql(
         "insert into public.harness_experiments "
         "(experiment_id,action,hypothesis,decision_quality,seconds_per_answer,"
-        "forbidden_platform_risk,memory_diff_lines,knowledge_regression,accepted,"
+        "forbidden_platform_risk,prompt_injection_risk,memory_diff_lines,"
+        "knowledge_regression,accepted,"
         "rolled_back,source_box,evidence_episode_ids,user_preference,test_method,metadata) values ("
         f"{_sql_quote(registry_id)},'mutate_policy',{_sql_quote(entry.get('hypothesis'))},"
         f"{float(entry.get('accuracy') or 0)},{float(entry.get('retrieval_s') or 0)},"
         f"{max(0, 100 - float(entry.get('deal_safety') or 100))},"
-        f"{entry['episodic_diff_lines']},{entry['knowledge_regression']},"
+        f"null,{entry['episodic_diff_lines']},{entry['knowledge_regression']},"
         f"{'true' if entry.get('accepted') else 'false'},false,'cursor-karpathy',"
         f"{episode_array},{_sql_quote(preference[:500])},"
         f"{_sql_quote('Verifiers frozen golden set + rubric/LLM judge; same cases as champion')},"
@@ -361,6 +365,7 @@ def persist_harness_experiment(entry, champion, candidate, evidence, run_id):
         "on conflict (experiment_id) do update set "
         "decision_quality=excluded.decision_quality,seconds_per_answer=excluded.seconds_per_answer,"
         "forbidden_platform_risk=excluded.forbidden_platform_risk,"
+        "prompt_injection_risk=excluded.prompt_injection_risk,"
         "memory_diff_lines=excluded.memory_diff_lines,"
         "knowledge_regression=excluded.knowledge_regression,accepted=excluded.accepted,"
         "evidence_episode_ids=excluded.evidence_episode_ids,user_preference=excluded.user_preference,"
@@ -404,7 +409,7 @@ def post_discord_insight(entry, history):
         f"🔬 **AutoResearch {verdict} · {entry.get('version')}**\n"
         f"Decision quality **{entry.get('accuracy', 0):.4f}** ({delta:+.4f}) · "
         f"seconds/answer **{entry.get('retrieval_s', 0):.2f}s**\n"
-        f"Forbidden-platform risk **{100 - entry.get('deal_safety', 100):.1f}%** · "
+        "Prompt injection risk **not measured** · "
         f"memory diff **{entry.get('episodic_diff_lines', 0)} lines** · "
         f"knowledge regression **{entry.get('knowledge_regression', 0):.4f}**\n"
         f"Hypothesis: {entry.get('hypothesis') or 'baseline policy check'}"

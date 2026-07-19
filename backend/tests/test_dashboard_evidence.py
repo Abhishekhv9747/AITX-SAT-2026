@@ -23,6 +23,7 @@ class EvidencePayloadTest(unittest.TestCase):
             "decision_quality": .7,
             "seconds_per_answer": 2.1,
             "forbidden_platform_risk": 0,
+            "prompt_injection_risk": None,
             "memory_diff_lines": 4,
             "knowledge_regression": 0,
             "accepted": True,
@@ -32,7 +33,7 @@ class EvidencePayloadTest(unittest.TestCase):
             "research_urls": [],
             "user_preference": "",
             "test_method": "Frozen golden set",
-            "metadata": {"rollouts": 30},
+            "metadata": {"episodes_tried": 15, "rollouts": 30, "stored_samples": 30},
             "created_at": "2026-07-19T00:00:00Z",
         }]
         rows = [{
@@ -42,20 +43,22 @@ class EvidencePayloadTest(unittest.TestCase):
             "accepted": True,
             "accuracy": .7,
             "retrieval_s": 2.1,
-            "deal_safety": 100,
+            "prompt_injection_risk": None,
             "stability": 0,
+            "episodes_tried": 15,
+            "stored_samples": 30,
             "n": 30,
         }]
 
-        soul = [{"agent_name": "hermes", "version": 2, "diff_lines": 2,
-                 "summary": "Learned online-only preference"}]
-        point = _experiment_payload(rows, "test", [episode], registry, soul)["experiments"][0]
+        point = _experiment_payload(rows, "test", [episode], registry)["experiments"][0]
 
         self.assertEqual(point["evidence"]["source"], "Supabase harness registry")
         self.assertEqual(point["evidence"]["episode_ids"], [episode["episode_id"]])
         self.assertEqual(point["evidence"]["preference"], "👍 ×2")
-        self.assertEqual(point["episodic_diff_lines"], 2)
-        self.assertIn("Hermes SOUL v2", point["evidence"]["memory_change"])
+        self.assertEqual(point["episodic_diff_lines"], 4)
+        self.assertEqual(point["episodes_tried"], 15)
+        self.assertIsNone(point["prompt_injection_risk"])
+        self.assertIn("4 episodic memory lines", point["evidence"]["memory_change"])
 
     def test_legacy_run_is_not_given_unrelated_evidence(self):
         payload = _experiment_payload(

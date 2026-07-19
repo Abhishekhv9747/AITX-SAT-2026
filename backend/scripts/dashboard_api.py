@@ -319,17 +319,26 @@ def episodic_evidence(limit=16):
 
 
 def harness_experiments(limit=200):
-    """Measured harness mutations and their explicit evidence links."""
+    """Measured evaluations and their explicit evidence links."""
     with database() as connection, connection.cursor(cursor_factory=RealDictCursor) as cursor:
         cursor.execute(
             """
-            select experiment_id, action, hypothesis, decision_quality,
-                   seconds_per_answer, forbidden_platform_risk, memory_diff_lines,
-                   knowledge_regression, accepted, rolled_back, source_box,
-                   evidence_episode_ids, research_urls, user_preference,
-                   test_method, metadata, created_at
-            from public.harness_experiments
-            order by created_at asc
+            select h.experiment_id, h.action, h.hypothesis, h.decision_quality,
+                   h.seconds_per_answer, h.forbidden_platform_risk,
+                   h.prompt_injection_risk, h.memory_diff_lines,
+                   h.knowledge_regression, h.accepted, h.rolled_back, h.source_box,
+                   h.evidence_episode_ids, h.research_urls, h.user_preference,
+                   h.test_method, h.metadata, h.created_at,
+                   s.stored_samples, s.stored_episodes
+            from public.harness_experiments h
+            left join (
+              select evaluation_id, count(*) as stored_samples,
+                     count(distinct episode_index) as stored_episodes
+              from public.evaluation_samples
+              group by evaluation_id
+            ) s on s.evaluation_id = h.experiment_id
+            where coalesce(h.metadata->>'hidden_from_evals', 'false') <> 'true'
+            order by h.created_at asc
             limit %s
             """,
             (limit,),
@@ -341,7 +350,7 @@ def harness_experiments(limit=200):
 
 
 def soul_history(limit=50):
-    """Versioned Hermes preferences; diff_lines is leaderboard metric four."""
+    """Versioned Hermes preferences; diff_lines is Evals metric four."""
     with database() as connection, connection.cursor(cursor_factory=RealDictCursor) as cursor:
         cursor.execute(
             """
@@ -375,8 +384,11 @@ def _feedback_summary(episode):
 
 
 def _registry_rows(rows):
-    return [
-        {
+    output = []
+    for row in rows:
+        metadata = row.get("metadata") or {}
+        prompt_risk = row.get("prompt_injection_risk")
+        output.append({
             "registry_id": row["experiment_id"],
             "source": "supabase-harness-registry",
             "ts": row["created_at"],
@@ -387,19 +399,28 @@ def _registry_rows(rows):
             "stability": -float(row.get("knowledge_regression") or 0),
             "hypothesis": row.get("hypothesis") or row["action"].replace("_", " "),
             "accuracy": float(row.get("decision_quality") or 0),
-            "retrieval_s": float(row.get("seconds_per_answer") or 0),
-            "deal_safety": 100 - float(row.get("forbidden_platform_risk") or 0),
+            "retrieval_s": (
+                float(row["seconds_per_answer"])
+                if row.get("seconds_per_answer") is not None else None
+            ),
+            "prompt_injection_risk": (
+                float(prompt_risk) if prompt_risk is not None else None
+            ),
             "episodic_diff_lines": int(row.get("memory_diff_lines") or 0),
             "knowledge_regression": float(row.get("knowledge_regression") or 0),
-            "n": int((row.get("metadata") or {}).get("rollouts") or 0),
-        }
-        for row in rows
-    ]
+            "episodes_tried": int(
+                row.get("stored_episodes") or metadata.get("episodes_tried") or 0
+            ),
+            "stored_samples": int(
+                row.get("stored_samples") or metadata.get("stored_samples") or 0
+            ),
+            "n": int(metadata.get("rollouts") or 0),
+        })
+    return output
 
 
-def _experiment_payload(rows, source, episodes=None, registry=None, soul=None):
+def _experiment_payload(rows, source, episodes=None, registry=None):
     registry = registry or []
-    latest_soul = (soul or [None])[-1]
     registry_by_id = {row["experiment_id"]: row for row in registry}
     linked_ids = {row.get("registry_id") for row in rows}
     rows = [*rows, *[
@@ -411,19 +432,15 @@ def _experiment_payload(rows, source, episodes=None, registry=None, soul=None):
     episodes_by_id = {row["episode_id"]: row for row in episodes or []}
     experiments = []
     for index, row in enumerate(clean, 1):
-        safety = float(row.get("deal_safety", 100))
         stability = float(row.get("stability", 0) or 0)
         recorded = registry_by_id.get(row.get("registry_id"))
         evidence_ids = (recorded or {}).get("evidence_episode_ids") or []
         linked_episodes = [episodes_by_id[row_id] for row_id in evidence_ids if row_id in episodes_by_id]
         episode = linked_episodes[0] if linked_episodes else None
-        is_latest = index == len(clean)
         memory_lines = int(
-            latest_soul.get("diff_lines")
-            if is_latest and latest_soul
-            else (recorded or {}).get("memory_diff_lines")
-                 or row.get("episodic_diff_lines")
-                 or 0
+            (recorded or {}).get("memory_diff_lines")
+            or row.get("episodic_diff_lines")
+            or 0
         )
         description = row.get("hypothesis") or row.get("version", f"experiment {index}")
         preference = (recorded or {}).get("user_preference") or ""
@@ -434,12 +451,15 @@ def _experiment_payload(rows, source, episodes=None, registry=None, soul=None):
             **row,
             "experiment": index,
             "kept": bool(row.get("accepted") or row.get("role") == "champion"),
-            "price_regression": round(max(0, 100 - safety), 3),
+            "prompt_injection_risk": row.get("prompt_injection_risk"),
             "episodic_diff_lines": memory_lines,
             "knowledge_regression": round(
                 float((recorded or {}).get("knowledge_regression") or max(0, -stability)),
                 4,
             ),
+            "episodes_tried": int(row.get("episodes_tried") or 0),
+            "rollouts": int(row.get("n") or 0),
+            "stored_samples": int(row.get("stored_samples") or 0),
             "description": description,
             "evidence": {
                 "source": "Supabase harness registry" if recorded else "EC2 experiment record",
@@ -450,16 +470,13 @@ def _experiment_payload(rows, source, episodes=None, registry=None, soul=None):
                 "improvement": description,
                 "preference": preference[:220] or "No linked Discord preference was recorded for this run.",
                 "memory_change": (
-                    f"Hermes SOUL v{latest_soul['version']} · {memory_lines} diff line"
-                    f"{'s' if memory_lines != 1 else ''} · {latest_soul.get('summary') or 'preference update'}"
-                    if is_latest and latest_soul else
                     f"{memory_lines} episodic memory line{'s' if memory_lines != 1 else ''} proposed"
                     if memory_lines else "No episodic memory patch attached"
                 ),
                 "tested_by": (
                     (recorded or {}).get("test_method")
-                    or f"Verifiers golden set · {int(row.get('n') or 0)} judged rollouts · "
-                       f"{safety:.1f}% deal safety"
+                    or f"Verifiers golden set · {int(row.get('episodes_tried') or 0)} episodes · "
+                       f"{int(row.get('n') or 0)} rollouts"
                 ),
                 "episode_ids": evidence_ids,
                 "research_urls": research_urls,
@@ -468,8 +485,16 @@ def _experiment_payload(rows, source, episodes=None, registry=None, soul=None):
     if not experiments:
         raise ValueError("no measured autoresearch rows")
     kept = [row for row in experiments if row["kept"]]
-    current = kept[-1] if kept else experiments[0]
+    current = experiments[-1]
     first = experiments[0]
+    first_prompt_risk = next(
+        (row["prompt_injection_risk"] for row in experiments if row["prompt_injection_risk"] is not None),
+        None,
+    )
+    latest_prompt_risk = next(
+        (row["prompt_injection_risk"] for row in reversed(experiments) if row["prompt_injection_risk"] is not None),
+        None,
+    )
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": source,
@@ -481,12 +506,15 @@ def _experiment_payload(rows, source, episodes=None, registry=None, soul=None):
             "accuracy_now": current["accuracy"],
             "retrieval_start": first.get("retrieval_s", 0),
             "retrieval_now": current.get("retrieval_s", 0),
-            "price_regression_start": first["price_regression"],
-            "price_regression_now": current["price_regression"],
+            "prompt_injection_risk_start": first_prompt_risk,
+            "prompt_injection_risk_now": latest_prompt_risk,
             "episodic_diff_start": first["episodic_diff_lines"],
             "episodic_diff_now": current["episodic_diff_lines"],
             "knowledge_regression_start": first["knowledge_regression"],
             "knowledge_regression_now": current["knowledge_regression"],
+            "episodes_tried": sum(row["episodes_tried"] for row in experiments),
+            "rollouts": sum(row["rollouts"] for row in experiments),
+            "stored_samples": sum(row["stored_samples"] for row in experiments),
         },
         "experiments": experiments,
         "seed_justification": {"supabase_note": f"Live measured history from {source}"},
@@ -494,47 +522,18 @@ def _experiment_payload(rows, source, episodes=None, registry=None, soul=None):
 
 
 def autoresearch_experiments():
-    """Prefer the live coordinator; retain committed evidence as an offline fallback."""
+    """Serve only timestamped evaluation history persisted in Supabase."""
     try:
         episodes = episodic_evidence()
     except Exception:
         episodes = []
-    try:
-        registry = harness_experiments()
-    except Exception:
-        registry = []
-    try:
-        soul = soul_history()
-    except Exception:
-        soul = []
-    try:
-        return _experiment_payload(
-            measured_radar(),
-            "live EC2/Railway loop + Supabase harness registry",
-            episodes,
-            registry,
-            soul,
-        )
-    except Exception:
-        pass
-    if AUTORESEARCH_EXPERIMENTS.exists():
-        payload = json.loads(AUTORESEARCH_EXPERIMENTS.read_text())
-        return _experiment_payload(
-            payload.get("experiments", []),
-            "committed experiment snapshot + live Supabase harness registry",
-            episodes,
-            registry,
-            soul,
-        )
-    if RADAR_SNAPSHOTS.exists():
-        return _experiment_payload(
-            json.loads(RADAR_SNAPSHOTS.read_text()),
-            "committed radar snapshot",
-            episodes,
-            registry,
-            soul,
-        )
-    raise FileNotFoundError("no autoresearch experiment history")
+    registry = harness_experiments()
+    return _experiment_payload(
+        [],
+        "live Supabase evaluations",
+        episodes,
+        registry,
+    )
 
 
 def try_supabase_rsi_runs():

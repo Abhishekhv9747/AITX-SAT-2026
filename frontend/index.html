@@ -24,7 +24,7 @@
     <nav class="primary-nav">
       <button class="nav-link active" data-page="dashboard"><i class="fa-solid fa-table-cells-large"></i><span>Dashboard</span></button>
       <button class="nav-link" data-page="deals"><i class="fa-solid fa-tags"></i><span>Deals</span><b>18</b></button>
-      <button class="nav-link" data-page="leaderboard"><i class="fa-solid fa-ranking-star"></i><span>Leaderboard</span></button>
+      <button class="nav-link" data-page="evals"><i class="fa-solid fa-chart-line"></i><span>Evals</span></button>
       <button class="nav-link" data-page="methodology"><i class="fa-solid fa-diagram-project"></i><span>Methodology</span></button>
     </nav>
 
@@ -131,22 +131,22 @@
       <div class="deal-grid" id="deal-grid"></div>
     </section>
 
-    <section class="page" id="leaderboard-page">
+    <section class="page" id="evals-page">
       <div class="page-head compact leaderboard-head">
         <div>
-          <p class="eyebrow">Autoresearch · Jul 17 5pm → now</p>
-          <h1>Leaderboard</h1>
-          <p>Karpathy-style keep/discard staircase across five objectives, using measured EC2 experiments from the live coordinator.</p>
+          <p class="eyebrow">Timestamped · persistent · measured</p>
+          <h1>Evals</h1>
+          <p>Real Verifiers and Prime evaluation runs stored in Supabase. Unmeasured metrics remain blank.</p>
         </div>
-        <span class="edition" id="improvement-evidence">Loading experiment history…</span>
+        <span class="edition" id="improvement-evidence">Loading Supabase evals…</span>
       </div>
 
       <div class="seed-bar" id="seed-bar">
         <div><small>Data source</small><strong id="seed-value">—</strong></div>
-        <div><small>Experiments</small><strong id="seed-exp-count">—</strong></div>
-        <div><small>Kept</small><strong id="seed-kept-count">—</strong></div>
-        <div><small>Evaluation stack</small><strong id="seed-anchors">Verifiers · Prime-RL · live radar</strong></div>
-        <p id="seed-note">Loading measured experiment history…</p>
+        <div><small>Evaluations</small><strong id="seed-eval-count">—</strong></div>
+        <div><small>Episodes tried</small><strong id="seed-episode-count">—</strong></div>
+        <div><small>Rollouts</small><strong id="seed-rollout-count">—</strong></div>
+        <p id="seed-note">Loading timestamped Supabase history…</p>
       </div>
 
       <div class="karpathy-grid" id="karpathy-grid">
@@ -159,8 +159,8 @@
           <div class="karpathy-chart-wrap"><canvas id="chart-retrieval" aria-label="Retrieval time staircase"></canvas></div>
         </article>
         <article class="panel karpathy-panel">
-          <div class="panel-head"><div><p class="eyebrow">03 · Forbidden-platform risk ↓</p><h2>Forbidden-platform risk</h2></div><span class="data-badge" id="price-delta">—</span></div>
-          <div class="karpathy-chart-wrap"><canvas id="chart-price" aria-label="Price regression staircase"></canvas></div>
+          <div class="panel-head"><div><p class="eyebrow">03 · Prompt injection risk ↓</p><h2>Prompt injection risk</h2></div><span class="data-badge" id="injection-delta">—</span></div>
+          <div class="karpathy-chart-wrap"><canvas id="chart-injection" aria-label="Prompt injection risk across evaluations"></canvas><p class="empty-metric-note" id="injection-empty">No prompt-injection suite has run yet.</p></div>
         </article>
         <article class="panel karpathy-panel">
           <div class="panel-head"><div><p class="eyebrow">04 · Memory change</p><h2>Hermes episodic memory diff lines</h2></div><span class="data-badge" id="memory-delta">—</span></div>
@@ -236,7 +236,7 @@
             </div>
             <h3>Memory Audit</h3>
           </article>
-          <article class="method-video-card loop-card" data-loop-index="3" data-loop-detail="The orchestrator reads the five Leaderboard metrics and compares the current champion with the latest evaluated challenger.">
+          <article class="method-video-card loop-card" data-loop-index="3" data-loop-detail="The orchestrator reads the five Evals metrics and compares the current champion with the latest evaluated challenger.">
             <div class="method-video">
               <video autoplay muted loop playsinline preload="metadata" poster="media/rsi-03-verifiers-cycle.jpg?v=3">
                 <source src="media/rsi-03-verifiers-cycle.mp4?v=3" type="video/mp4">

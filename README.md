@@ -7,7 +7,7 @@
 **AITX SAT 2026 edition.** Same loop as [karpathy/autoresearch](https://github.com/karpathy/autoresearch): an agent edits one file, runs a fixed evaluation, **keeps** the change if the metric Pareto-improves, otherwise **discards** via git. Here the artifact under optimization is a GPU-purchase **policy** (lessons text), scored on a frozen golden set — not `val_bpb` on a GPT.
 
 ```
-decision quality ↑ · seconds/answer ↓ · forbidden-platform risk ↓
+decision quality ↑ · seconds/answer ↓ · prompt-injection risk ↓
 episodic-memory diff lines · agent-knowledge regression ↓
 ```
 
@@ -148,15 +148,18 @@ detail; open or fullscreen its recording to inspect the underlying evidence.
 11. **Human Review** — a weekly agent synthesis asks for approval or corrections,
     which become the next cycle's evidence.
 
-The five Leaderboard evaluations are:
+The five Evals metrics are:
 
 1. **Decision quality**
 2. **Seconds per answer**
-3. **Forbidden-platform risk**
+3. **Prompt injection risk**
 4. **Hermes episodic memory diff lines**
 5. **Agent knowledge regression**
 
-![Live research evidence on the Leaderboard](output/playwright/leaderboard-research-evidence.png)
+Prompt-injection risk is intentionally shown as **not measured** until a
+dedicated injection suite runs. It is not inferred from platform-policy errors.
+
+![Live Supabase evidence on the Evals page](output/playwright/evals-real-supabase.png)
 
 ![Eleven-step methodology loop](output/playwright/methodology-eleven-step-loop.png)
 
@@ -166,11 +169,11 @@ The five Leaderboard evaluations are:
 
 1. Discord exchanges are normalized into `public.episodes`; Hermes preference
    changes are versioned in `public.agent_soul`.
-2. The loop writes the five metrics and explicit `evidence_episode_ids` to
-   `public.harness_experiments`; `/api/autoresearch-experiments` joins only those
-   linked episodes. Legacy runs are clearly marked as unlinked.
-3. Each hover state shows the agent change, user preference, current Hermes
-   `SOUL.md` diff lines, rollout count, deal safety, and judging method.
+2. The loop writes timestamped summaries to `public.harness_experiments` and
+   raw rollout payloads to `public.evaluation_samples`; the Evals API reads only
+   this Supabase history. The generated 84-point demo snapshot is not used.
+3. Each hover state shows the agent change, user preference, episodic-memory
+   diff, episodes tried, rollout/sample counts, and judging method.
 4. A kept experiment advances the champion; a discarded branch is retained in
    the chart as negative evidence.
 
@@ -251,9 +254,9 @@ The five Leaderboard evaluations are:
 
 3. **Vercel (Decision Frontier)** — `vercel.json` serves `frontend/` as static
    files and routes `/api/*` to `backend/api/index.py`, which calls
-   `backend/scripts/dashboard_api.py`. The leaderboard:
-   - loads `/api/autoresearch-experiments` from the live EC2/Railway feed and
-     enriches it with recent Supabase episodic evidence
+   `backend/scripts/dashboard_api.py`. The Evals page:
+   - loads `/api/autoresearch-experiments` exclusively from timestamped
+     `harness_experiments` and `evaluation_samples` rows in Supabase
    - exposes `/api/research-evidence` for the underlying user-feedback records
    - loads marketplace cards from hosted Supabase
    - plays the 11 methodology recordings from `frontend/media/`
@@ -270,22 +273,26 @@ Local dashboard without Vercel:
 
 ```bash
 python backend/scripts/dashboard_api.py   # http://127.0.0.1:8787
-open frontend/index.html#leaderboard
+open frontend/index.html#evals
 ```
 
 ---
 
-## Metrics & seeds
+## Metrics & evaluation storage
 
-Measured anchors that justify the committed `results.tsv` / `progress.png` seed:
+Measured evaluation runs persisted in Supabase:
 
-| Anchor | Source | Accuracy | Latency |
-|--------|--------|----------|---------|
-| Verifiers baseline (memory OFF) | `autoresearch/data/rsi_runs.csv` | 0.5511 | 35.5s |
-| Prime-RL v1 | `autoresearch/data/latest_rsi_eval.json` | 0.5822 | 6.77s |
-| Live promotion | Railway `/api/radar` cycle-1 | 0.5933 | 2.84s |
+| Evaluation | Episodes / rollouts | Decision quality | Median answer time |
+|------------|---------------------|------------------|--------------------|
+| Verifiers baseline `bed4add5` | 15 / 45 | 0.5511 | 10.76s |
+| Cloud memory candidate | 15 / 45 attempted | 0.1667 | not measured |
+| Prime `ipjzblojwpcswqvk67l7fczc` | 15 / 45 | 0.5822 | 6.68s |
 
-Regenerate the demo history:
+Supabase currently contains 90 raw rollout samples. The cloud candidate has no
+raw samples because 34 of its 45 provider calls failed.
+
+The old demo-history generator remains available for isolated design work, but
+its output is never read by the Evals API:
 
 ```bash
 python autoresearch/scripts/seed_autoresearch_history.py

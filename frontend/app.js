@@ -23,10 +23,11 @@ async function api(path){
   return payload;
 }
 
-function showPage(id){
+function showPage(requestedId){
+  const id=requestedId==="leaderboard"?"evals":requestedId;
   const page=$(`#${id}-page`);
   if(!page)return;
-  const focusView=["leaderboard","methodology"].includes(id);
+  const focusView=["evals","methodology"].includes(id);
   document.body.classList.toggle("focus-view",focusView);
   $$(".method-video video").forEach(video=>id==="methodology"?video.play().catch(()=>{}):video.pause());
   $$(".page").forEach(el=>el.classList.toggle("active",el===page));
@@ -35,7 +36,7 @@ function showPage(id){
   window.scrollTo({top:0,behavior:"smooth"});
   history.replaceState(null,"",`#${id}`);
   if(id==="dashboard")setTimeout(()=>marketChart?.resize(),0);
-  if(id==="leaderboard")setTimeout(()=>Object.values(karpathyCharts).forEach(c=>c?.resize()),0);
+  if(id==="evals")setTimeout(()=>Object.values(karpathyCharts).forEach(c=>c?.resize()),0);
 }
 
 function renderListingRows(rows){
@@ -137,38 +138,50 @@ async function loadDeals(){
 const metricMeta={
   accuracy:{label:"Decision quality",format:value=>Number(value).toFixed(3)},
   retrieval_s:{label:"Seconds per answer",format:value=>`${Number(value).toFixed(2)}s`},
-  price_regression:{label:"Forbidden-platform risk",format:value=>`${Number(value).toFixed(1)}%`},
+  prompt_injection_risk:{label:"Prompt injection risk",format:value=>`${Number(value).toFixed(1)}%`},
   episodic_diff_lines:{label:"Hermes episodic memory diff lines",format:value=>`${Number(value).toFixed(0)} lines`},
   knowledge_regression:{label:"Agent knowledge regression",format:value=>Number(value).toFixed(4)}
 };
+const measured=value=>value!==null&&value!==undefined&&Number.isFinite(Number(value));
 
 function renderResearchDetail(exp,metric="accuracy",previous=null){
   if(!exp)return;
   const evidence=exp.evidence||{};
-  const value=Number(exp[metric]??0), prior=Number(previous?.[metric]??value);
-  const delta=value-prior, meta=metricMeta[metric]||metricMeta.accuracy;
+  const meta=metricMeta[metric]||metricMeta.accuracy;
+  const value=measured(exp[metric])?Number(exp[metric]):null;
+  const prior=measured(previous?.[metric])?Number(previous[metric]):null;
+  const delta=value!==null&&prior!==null?value-prior:null;
   $("#research-detail-title").textContent=`#${exp.experiment} · ${exp.description||exp.version}`;
-  $("#research-detail-decision").textContent=`${exp.kept||exp.accepted?"KEPT":"DISCARDED"} · ${meta.label}: ${meta.format(value)} · Δ ${delta>=0?"+":""}${meta.format(delta)}`;
+  $("#research-detail-decision").textContent=[
+    exp.kept||exp.accepted?"PROMOTED":exp.rolled_back?"ROLLED BACK":"EVALUATED",
+    `${meta.label}: ${value===null?"not measured":meta.format(value)}`,
+    `Δ ${delta===null?"—":`${delta>=0?"+":""}${meta.format(delta)}`}`
+  ].join(" · ");
   $("#research-detail-source").textContent=[evidence.source,evidence.source_detail].filter(Boolean).join(" · ")||"Live EC2 experiment";
   $("#research-detail-change").textContent=evidence.improvement||exp.description||"No harness change recorded.";
   $("#research-detail-preference").textContent=evidence.preference||"No explicit preference attached to this trial.";
-  $("#research-detail-test").textContent=[evidence.memory_change,evidence.tested_by].filter(Boolean).join(" · ")||"Verifiers golden set + LLM judge";
+  $("#research-detail-test").textContent=[
+    `${exp.episodes_tried||0} episodes · ${exp.rollouts||0} rollouts · ${exp.stored_samples||0} stored samples`,
+    evidence.memory_change,
+    evidence.tested_by
+  ].filter(Boolean).join(" · ");
 }
 
-/** Karpathy-style keep/discard staircase for one metric. */
+/** Timestamped evaluation points with the promoted baseline. */
 function renderKarpathyChart(canvasId, experiments, metric, opts={}){
   const canvas=$(`#${canvasId}`);
   if(!canvas||!window.Chart)return;
   let best=null;
   const running=[], discarded=[], keptPts=[];
-  experiments.forEach((e,i)=>{
-    if(e.kept||e.accepted){
-      best=e[metric];
-      keptPts.push(e[metric]);
+  experiments.forEach(e=>{
+    const value=measured(e[metric])?Number(e[metric]):null;
+    if((e.kept||e.accepted)&&value!==null){
+      best=value;
+      keptPts.push(value);
       discarded.push(null);
     }else{
       keptPts.push(null);
-      discarded.push(e[metric]);
+      discarded.push(value);
     }
     running.push(best);
   });
@@ -181,7 +194,7 @@ function renderKarpathyChart(canvasId, experiments, metric, opts={}){
       labels,
       datasets:[
         {
-          label:"Discarded",
+          label:"Evaluated",
           data:discarded,
           showLine:false,
           pointRadius:3,
@@ -191,7 +204,7 @@ function renderKarpathyChart(canvasId, experiments, metric, opts={}){
           order:1
         },
         {
-          label:"Kept",
+          label:"Promoted",
           data:keptPts,
           showLine:false,
           pointRadius:5.5,
@@ -202,7 +215,7 @@ function renderKarpathyChart(canvasId, experiments, metric, opts={}){
           order:3
         },
         {
-          label:"Running best",
+          label:"Promoted baseline",
           data:running,
           stepped:"after",
           borderColor:"#28754c",
@@ -234,7 +247,7 @@ function renderKarpathyChart(canvasId, experiments, metric, opts={}){
               const exp=experiments[items[0]?.dataIndex ?? 0];
               const evidence=exp?.evidence||{};
               return exp?[
-                `${exp.kept||exp.accepted?"KEPT":"discarded"}: ${exp.description}`,
+                `${exp.kept||exp.accepted?"PROMOTED":exp.rolled_back?"ROLLED BACK":"EVALUATED"}: ${exp.description}`,
                 `Evidence: ${evidence.source||"live EC2 research"}`,
                 `Preference: ${(evidence.preference||"none attached").slice(0,90)}`,
                 `Test: ${(evidence.tested_by||"Verifiers golden set").slice(0,90)}`
@@ -288,45 +301,40 @@ function renderExperiments(payload){
   state.experiments=payload;
   const exps=(payload.experiments||[]).map(exp=>({
     ...exp,
+    retrieval_s:measured(exp.retrieval_s)?Number(exp.retrieval_s):null,
+    prompt_injection_risk:measured(exp.prompt_injection_risk)?Number(exp.prompt_injection_risk):null,
     episodic_diff_lines:Number(exp.episodic_diff_lines??0),
     knowledge_regression:Number(exp.knowledge_regression??exp.agent_regression??0)
   }));
   const s=payload.summary||{};
-  const sourceLabel=payload.source||"offline snapshot";
-  $("#improvement-evidence").textContent=`${s.experiments||exps.length} experiments · ${s.kept||0} kept · ${sourceLabel}`;
+  const sourceLabel=payload.source||"live Supabase evaluations";
+  $("#improvement-evidence").textContent=`${s.experiments||exps.length} evals · ${s.episodes_tried||0} episodes · ${s.rollouts||0} rollouts · ${sourceLabel}`;
   $("#seed-value").textContent=sourceLabel;
-  $("#seed-exp-count").textContent=String(s.experiments??exps.length);
-  $("#seed-kept-count").textContent=String(s.kept??0);
+  $("#seed-eval-count").textContent=String(s.experiments??exps.length);
+  $("#seed-episode-count").textContent=String(s.episodes_tried??0);
+  $("#seed-rollout-count").textContent=String(s.rollouts??0);
   const note=payload.seed_justification?.supabase_note||"";
-  $("#seed-note").textContent=note||"Measured experiment history from the live EC2 loop.";
+  $("#seed-note").textContent=`${note||"Measured evaluation history from Supabase."} · ${s.stored_samples||0}/${s.rollouts||0} raw rollout samples persisted.`;
   $("#acc-delta").textContent=`${(s.accuracy_start??0).toFixed(3)} → ${(s.accuracy_now??0).toFixed(3)}`;
-  $("#ret-delta").textContent=`${(s.retrieval_start??0).toFixed(1)}s → ${(s.retrieval_now??0).toFixed(1)}s`;
-  $("#price-delta").textContent=`${(s.price_regression_start??0).toFixed(1)} → ${(s.price_regression_now??0).toFixed(1)}`;
+  $("#ret-delta").textContent=measured(s.retrieval_start)&&measured(s.retrieval_now)?`${Number(s.retrieval_start).toFixed(1)}s → ${Number(s.retrieval_now).toFixed(1)}s`:"not measured";
+  $("#injection-delta").textContent=measured(s.prompt_injection_risk_start)&&measured(s.prompt_injection_risk_now)?`${Number(s.prompt_injection_risk_start).toFixed(1)} → ${Number(s.prompt_injection_risk_now).toFixed(1)}`:"not measured";
+  $("#injection-empty").hidden=exps.some(exp=>measured(exp.prompt_injection_risk));
   $("#memory-delta").textContent=`${Number(s.episodic_diff_now??exps.at(-1)?.episodic_diff_lines??0).toFixed(0)} lines`;
   $("#knowledge-delta").textContent=`${Number(s.knowledge_regression_start??0).toFixed(3)} → ${Number(s.knowledge_regression_now??exps.at(-1)?.knowledge_regression??0).toFixed(3)}`;
 
   renderKarpathyChart("chart-accuracy", exps, "accuracy", {yLabel:"Decision quality"});
   renderKarpathyChart("chart-retrieval", exps, "retrieval_s", {yLabel:"Seconds per answer"});
-  renderKarpathyChart("chart-price", exps, "price_regression", {yLabel:"Forbidden-platform risk"});
+  renderKarpathyChart("chart-injection", exps, "prompt_injection_risk", {yLabel:"Prompt injection risk"});
   renderKarpathyChart("chart-memory", exps, "episodic_diff_lines", {yLabel:"Hermes memory diff lines"});
   renderKarpathyChart("chart-knowledge", exps, "knowledge_regression", {yLabel:"Agent knowledge regression",annotate:true});
   renderResearchDetail(exps.at(-1),"accuracy",exps.at(-2));
 }
 
 async function loadExperiments(){
-  // Prefer API; fall back to static JSON committed in the repo.
   try{
     renderExperiments(await api("/api/autoresearch-experiments"));
-    return;
-  }catch(_){}
-  try{
-    const paths=[`data/autoresearch_experiments.json?t=${Date.now()}`,`../data/autoresearch_experiments.json?t=${Date.now()}`];
-    let res=null;
-    for(const path of paths){res=await fetch(path);if(res.ok)break;}
-    if(!res||!res.ok)throw new Error("offline experiment history missing");
-    renderExperiments(await res.json());
   }catch(error){
-    $("#improvement-evidence").textContent="Experiment history unavailable";
+    $("#improvement-evidence").textContent="Supabase evaluation history unavailable";
     $("#seed-note").textContent=error.message;
   }
 }

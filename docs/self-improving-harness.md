@@ -31,7 +31,7 @@ most of the substrate.** Here's exactly where each step stands.
 | 3 | Orchestrator evaluates current episodic memory | ✅ done | Hermes `SOUL.md` is versioned in `agent_soul`; the loop recalls its exact diff | — |
 | 4 | Reads eval metrics | ✅ done | loop scores every candidate | — |
 | 5 | Experiments conditioned on Supabase "what worked" | ✅ done | each mutation recalls recent episodes and accepted `harness_experiments` | richer strategy weighting remains future work |
-| 6 | **5 leaderboard metrics** | ✅ done | decision quality, seconds/answer, forbidden-platform risk, memory diff lines, knowledge regression | — |
+| 6 | **5 Evals metrics** | 🟡 partial | decision quality, seconds/answer, prompt-injection risk, memory diff lines, knowledge regression are persisted | dedicated prompt-injection suite has not run yet, so that metric is null |
 | 7 | Action space (Supabase-gated, OpenShell-gated, simulate ideas) | 🟡 partial | action registry + OpenShell policy exist | hub-search, distillation, and component swaps still need executors |
 | 8 | Evaluate with verifiers + LLM-judge on golden set | ✅ mostly | `gpu_deal_judge` env, rubric, golden dataset | rubric is rule-based; an LLM-judge reward func is a small add |
 | 9 | Promote with quick rollback | ✅ done | statistical gate + auto-rollback (`auto_promote.py`) | extend from policy to harness-components |
