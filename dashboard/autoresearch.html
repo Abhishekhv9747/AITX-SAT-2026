@@ -83,12 +83,17 @@ function trend(cv,hist){
   // x label
   c.fillStyle=css("--muted");c.textAlign="center";c.fillText("cycles over time →",W/2,H-3);
 }
-const API=(location.hostname.endsWith("railway.app")||location.protocol==="https:")?location.origin:"";
+const onRailway=location.hostname.endsWith("railway.app");
 async function refresh(){
   let hist=[];
-  // Prefer the live coordinator API; fall back to the committed file for local use.
-  try{ hist=await (await fetch(API+"/api/radar?t="+Date.now())).json(); }catch(e){}
-  if(!hist.length){ try{ hist=await (await fetch("../data/radar_snapshots.json?t="+Date.now())).json(); }catch(e){} }
+  // Served from the EC2 host (reliable, always fresh): use /radar.
+  // On Railway: /api/radar. Local file open: the committed snapshot file.
+  const sources = onRailway
+    ? [location.origin+"/api/radar", "../data/radar_snapshots.json"]
+    : ["/radar", location.origin+"/radar", "../data/radar_snapshots.json"];
+  for(const url of sources){
+    try{ const r=await fetch(url+(url.includes("?")?"":"?t="+Date.now())); if(r.ok){ hist=await r.json(); if(hist.length)break; } }catch(e){}
+  }
   // Robust to any malformed rows in an append-only store: keep only real snapshots.
   hist=(Array.isArray(hist)?hist:[]).filter(e=>e&&typeof e.accuracy==="number");
   if(!hist.length){document.getElementById("stats").textContent="no snapshots yet — loop warming up";return;}
