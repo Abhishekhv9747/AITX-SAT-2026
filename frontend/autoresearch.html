@@ -37,23 +37,29 @@ h1 { font-size:1.25rem; margin:.2rem 0 .1rem; } .sub { color:var(--muted); font-
   </div>
 </div>
 <script>
-const AXES=[["Accuracy",e=>e.accuracy],["Speed",e=>Math.max(0,Math.min(1,5/(e.retrieval_s||5)))],
-            ["Deal safety",e=>(e.deal_safety??100)/100],["Stability",e=>Math.max(0,Math.min(1,1+(e.stability??0)*4))]];
+// Five leaderboard axes (docs/self-improving-harness.md step 6):
+const AXES=[["Decision quality",e=>e.accuracy],
+            ["Speed",e=>Math.max(0,Math.min(1,5/(e.retrieval_s||5)))],
+            ["Deal safety",e=>(e.deal_safety??100)/100],
+            ["Memory Δ",e=>Math.max(0,Math.min(1,(e.memory_diff_lines??0)/20))],
+            ["Stability",e=>Math.max(0,Math.min(1,1+(e.stability??0)*4))]];
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 function radar(cv,entry,color){
-  const c=cv.getContext("2d"),W=cv.width,H=cv.height,cx=W/2,cy=H/2+8,R=Math.min(W,H)/2-46;
-  c.clearRect(0,0,W,H);c.strokeStyle=css("--line");c.fillStyle=css("--muted");c.font="11px system-ui";
-  for(let ring=1;ring<=4;ring++){c.beginPath();for(let i=0;i<=4;i++){const a=-Math.PI/2+i*Math.PI/2,r=R*ring/4;
-    c[i?"lineTo":"moveTo"](cx+r*Math.cos(a),cy+r*Math.sin(a));}c.stroke();}
-  AXES.forEach((ax,i)=>{const a=-Math.PI/2+i*Math.PI/2;
-    c.textAlign=["center","left","center","right"][i];c.fillText(ax[0],cx+(R+12)*Math.cos(a),cy+(R+14)*Math.sin(a));});
+  const c=cv.getContext("2d"),W=cv.width,H=cv.height,cx=W/2,cy=H/2+8,R=Math.min(W,H)/2-52;
+  const N=AXES.length, ang=i=>-Math.PI/2+i*2*Math.PI/N;
+  c.clearRect(0,0,W,H);c.strokeStyle=css("--line");c.fillStyle=css("--muted");c.font="10px system-ui";
+  for(let ring=1;ring<=4;ring++){c.beginPath();for(let i=0;i<=N;i++){const a=ang(i%N),r=R*ring/4;
+    c[i?"lineTo":"moveTo"](cx+r*Math.cos(a),cy+r*Math.sin(a));}c.closePath();c.stroke();}
+  AXES.forEach((ax,i)=>{const a=ang(i),x=cx+(R+14)*Math.cos(a);
+    c.textAlign=Math.abs(Math.cos(a))<0.3?"center":(Math.cos(a)>0?"left":"right");
+    c.fillText(ax[0],x,cy+(R+14)*Math.sin(a)+3);});
   if(!entry)return;
   c.beginPath();
-  AXES.forEach((ax,i)=>{const a=-Math.PI/2+i*Math.PI/2,r=R*Math.max(.02,ax[1](entry));
+  AXES.forEach((ax,i)=>{const a=ang(i),r=R*Math.max(.02,Math.min(1,ax[1](entry)));
     c[i?"lineTo":"moveTo"](cx+r*Math.cos(a),cy+r*Math.sin(a));});
   c.closePath();c.globalAlpha=.25;c.fillStyle=color;c.fill();c.globalAlpha=1;
   c.strokeStyle=color;c.lineWidth=2;c.stroke();
-  AXES.forEach((ax,i)=>{const a=-Math.PI/2+i*Math.PI/2,r=R*Math.max(.02,ax[1](entry));
+  AXES.forEach((ax,i)=>{const a=ang(i),r=R*Math.max(.02,Math.min(1,ax[1](entry)));
     c.beginPath();c.arc(cx+r*Math.cos(a),cy+r*Math.sin(a),3.5,0,7);c.fillStyle=color;c.fill();});
 }
 function trend(cv,hist){
