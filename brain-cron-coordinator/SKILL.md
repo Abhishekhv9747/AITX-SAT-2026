@@ -1,12 +1,12 @@
 ---
 name: brain-cron-coordinator
-description: Brain-only confirmation workflow for scheduling Hermes jobs from Discord.
+description: NemoHermes confirmation workflow for scheduling Hermes jobs from Discord.
 ---
 
-# Cron requests from Discord
+# Cron requests from NemoHermes
 
 When a user says `cron create` (or otherwise asks to schedule a recurring
-task), Brain coordinates the request but never runs `cron`, `hermes cron`, or
+task), NemoHermes coordinates the request but never runs `cron`, `hermes cron`, or
 any scheduler command itself.
 
 1. Extract a supported schedule, a short lowercase-hyphenated job name, and a
@@ -23,10 +23,10 @@ any scheduler command itself.
 ```bash
 curl -sS -X POST http://host.openshell.internal:8001/cron-parse -H 'Content-Type: application/json' -d '{"schedule":"<schedule>"}'
 ```
-3. Ask the same Discord user for an explicit confirmation such as `confirm
-   cron`. Do not submit, modify, or create anything until that confirmation is
-   present in the same conversation.
-4. Only after confirmation, submit the request to Hermes. Use the requester’s
+3. In `#gpu-desk`, the narrow command `!deals <supported schedule>` is an
+   explicit instruction to create the daily-deals job. Brain queues it for
+   Hermes immediately; other cron requests still require confirmation.
+4. For any confirmed request, submit it to Hermes. Use the requester’s
    Discord identity as the final argument:
 
 ```bash

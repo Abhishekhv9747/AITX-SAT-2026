@@ -16,4 +16,9 @@ more than one search for a user request; the command is capped at five results
 
 Use the returned titles, URLs, and content snippets to answer. State when the answer is based on web results and include the source URLs. Do not claim that a search succeeded if the command reports an error.
 
+For product, deal, or retailer research, preserve the direct URLs returned by
+the search. Give every online option a direct, clickable product or listing URL
+that the evidence supports. Clearly label every result as online or in-person /
+pickup, and do not imply that an in-person option can be purchased online.
+
 The command uses a protected OpenShell credential placeholder. Never ask Discord users for an API key and never print credentials.
