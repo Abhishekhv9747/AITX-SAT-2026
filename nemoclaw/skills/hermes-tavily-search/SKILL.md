@@ -5,7 +5,10 @@ description: Search the public web with Tavily. Use when a Discord user asks for
 
 # Tavily Search
 
-Run the dedicated search command for current web information:
+Use this only after the `database-first-research` policy determines that the
+shared Supabase data has no relevant or sufficiently current answer. Run no
+more than one search for a user request; the command is capped at five results
+(five websites maximum):
 
 ```bash
 /opt/hermes/.venv/bin/python /sandbox/.hermes/skills/tavily-search/tavily_search.py "<query>"
