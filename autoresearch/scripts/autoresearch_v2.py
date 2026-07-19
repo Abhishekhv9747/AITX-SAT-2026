@@ -215,6 +215,12 @@ def main():
     seeds = seed_hypotheses()
     print(f"[v2] seeded {len(seeds)} hypotheses from Supabase; champion {'loaded' if champion else 'empty'}",
           flush=True)
+    # champ_best = the highest score the champion has actually ACHIEVED, not a
+    # noisy re-measurement. Promotion must clear this ceiling so the champion
+    # can only ratchet UP — fixes the downward-drift bug (a candidate beating a
+    # noisy-low champion re-eval could otherwise regress absolute accuracy).
+    champ_best, _, _ = evaluate(champion, GOLDEN) if champion else (0.0, 0, 0.0)
+    print(f"[v2] champion best-established score: {champ_best:.3f}", flush=True)
     cycle = 0
     while True:
         cycle += 1
@@ -223,7 +229,11 @@ def main():
         cand_dq, nc, cand_sec = evaluate(cand, GOLDEN)
         champ_dq, nch, _ = evaluate(champion, GOLDEN)
         margin = round(cand_dq - champ_dq, 4)
-        accepted = margin >= 0.01 and nc >= 0.8 * len(GOLDEN)  # paired, real margin
+        # Promote only if BOTH: (a) genuinely better THIS round (paired, noise-
+        # cancelled) AND (b) not below the champion's best-established score.
+        confirmed_better = margin >= 0.01
+        no_regression = cand_dq >= champ_best - 0.005
+        accepted = confirmed_better and no_regression and nc >= 0.8 * len(GOLDEN)
         exp_id = f"v2-c{cycle}-{int(cand_dq*1000)}"
         # 4 of 5 metrics every cycle; the 5th (injection) is expensive so it
         # runs only on promotion, when a real change is worth the full scan.
@@ -231,6 +241,7 @@ def main():
         reg = round(min(0.0, margin), 4) if margin < 0 else 0.0  # regression only if worse
         if accepted:
             champion = cand
+            champ_best = max(champ_best, cand_dq)  # ratchet the ceiling UP only
             champ_file.write_text(champion)
             rec = REPO / "autoresearch" / "scripts" / "promote_to_soul.py"
             if rec.exists():
@@ -241,8 +252,9 @@ def main():
             inj = injection_risk()  # full defense-in-depth scan on the new champion
         record(exp_id, "mutate_policy", (cand.splitlines() or ["(empty)"])[0][:120],
                cand_dq, cand_sec, inj, mem or 0, reg, accepted)
-        print(f"[v2] cycle {cycle}: cand={cand_dq:.3f} champ={champ_dq:.3f} margin={margin:+.3f} "
-              f"{cand_sec:.1f}s/ans -> {'PROMOTE' if accepted else 'reject'}", flush=True)
+        why = "" if accepted else (" (below best)" if confirmed_better and not no_regression else "")
+        print(f"[v2] cycle {cycle}: cand={cand_dq:.3f} champ={champ_dq:.3f} best={champ_best:.3f} "
+              f"margin={margin:+.3f} {cand_sec:.1f}s/ans -> {'PROMOTE' if accepted else 'reject'}{why}", flush=True)
         if accepted:
             print(f"[v2] cycle {cycle}: PROMOTED (+{margin:.3f}) — SOUL +{mem} lines, "
                   f"injection_risk={inj}% — posting #eval", flush=True)
