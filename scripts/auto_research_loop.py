@@ -159,26 +159,19 @@ def snapshot(entry):
     SNAPSHOTS.parent.mkdir(exist_ok=True)
     SNAPSHOTS.write_text(json.dumps(hist, indent=1))
     if COORD:
-        # POST the FULL history each cycle: Railway storage is ephemeral, so a
-        # redeploy that wipes it self-heals within one cycle. Coordinator
-        # replaces on full-history sync (source=autoresearch-loop-full).
-        try:
-            requests.post(f"{COORD}/api/radar", timeout=20,
-                          json={"replace": True, "source": "autoresearch-loop-full",
-                                "rows": [{"source": "autoresearch-loop", **e} for e in hist]})
-        except requests.RequestException:
-            pass
-        try:
-            requests.post(f"{COORD}/api/evaluations", timeout=15,
-                          json={"source": "autoresearch-loop", **entry})
-        except requests.RequestException:
-            pass
+        # Append one clean row per cycle (works on any coordinator version).
+        for path in ("/api/radar", "/api/evaluations"):
+            try:
+                requests.post(f"{COORD}{path}", timeout=15,
+                              json={"source": "autoresearch-loop", **entry})
+            except requests.RequestException:
+                pass
     return hist
 
 
 def resync_coordinator():
-    """Railway storage is ephemeral: on start, re-POST the full local history
-    so a redeploy that wiped the coordinator self-heals within one cycle."""
+    """On start, re-POST the local history as a list (coordinator appends);
+    keeps the live leaderboard populated after an ephemeral redeploy wipe."""
     if not COORD or not SNAPSHOTS.exists():
         return
     try:

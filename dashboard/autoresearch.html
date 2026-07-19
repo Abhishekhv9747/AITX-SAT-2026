@@ -89,6 +89,8 @@ async function refresh(){
   // Prefer the live coordinator API; fall back to the committed file for local use.
   try{ hist=await (await fetch(API+"/api/radar?t="+Date.now())).json(); }catch(e){}
   if(!hist.length){ try{ hist=await (await fetch("../data/radar_snapshots.json?t="+Date.now())).json(); }catch(e){} }
+  // Robust to any malformed rows in an append-only store: keep only real snapshots.
+  hist=(Array.isArray(hist)?hist:[]).filter(e=>e&&typeof e.accuracy==="number");
   if(!hist.length){document.getElementById("stats").textContent="no snapshots yet — loop warming up";return;}
   const before=hist[0], champs=hist.filter(e=>e.role==="champion"), after=champs[champs.length-1]||before;
   radar(document.getElementById("before"),before,css("--muted"));
