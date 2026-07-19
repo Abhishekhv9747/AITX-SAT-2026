@@ -1,6 +1,6 @@
 # System status — 2026-07-18
 
-Verified live at 2026-07-19 04:35 UTC (23:35 CDT).
+Verified live at 2026-07-19 04:38 UTC (23:38 CDT).
 
 ## Executive state
 
@@ -10,7 +10,7 @@ Verified live at 2026-07-19 04:35 UTC (23:35 CDT).
 | Vercel API | Up | `/api/health` reached hosted Supabase |
 | Supabase | Healthy | Project `qzegmkzyzalmakoqxezc`, `ca-central-1`, `ACTIVE_HEALTHY` |
 | EC2 agent host | Running | `35.172.137.131`, both EC2 health checks passed |
-| AutoResearch | Running | 41 measured snapshots; challenger 1 of 25 executing |
+| AutoResearch | Running | 42 measured snapshots; challenger 1 safely discarded |
 | Railway coordinator | Up | `/api/status` and `/api/radar` returned 200 |
 | Discord agents | Up | Brain, Scout, Inspector, and Concierge authenticated |
 | Discord → daily training | Integrated here | Nightly tournament fetches real Discord exchanges and persists episodes |
@@ -25,7 +25,7 @@ Verified live at 2026-07-19 04:35 UTC (23:35 CDT).
   `autoresearch`, and `search-cache`.
 - `autoresearch` uses `restart=unless-stopped`.
 - Host cron runs `scripts/nightly_master_cycle.py` at `05:30 UTC`.
-- AutoResearch had 41 snapshots when checked. The current champion was 0.5933
+- AutoResearch had 42 snapshots when checked. The current champion was 0.5933
   decision accuracy, 100% deal safety.
 - Both security-group and NACL rules for SSH and the read-only leaderboard are
   active. `http://35.172.137.131:8787/` and `/radar` returned 200 publicly.
@@ -34,12 +34,20 @@ Verified live at 2026-07-19 04:35 UTC (23:35 CDT).
 - The merged Hermes workspace requires Git. The old bare-Python container
   failed once after the code update; Compose now installs Git and owns the
   durable `autoresearch` service. It restarted cleanly with zero restarts.
+- A second Cursor-created `t3.small` (`i-0339071b78eaf53ae`,
+  `107.21.178.135`) is healthy and running the same loop through systemd on a
+  12 GiB volume. It is a compute-only experiment box: it has inference keys but
+  no coordinator, Supabase, or Discord variables, so it does not update the
+  public UI or post insights. It self-stops at 05:00 UTC on July 20.
+- The canonical connected worker remains the `t3.xlarge`
+  (`i-093185e0c520144b3`). The AWS budget is $15/month; AWS currently reports
+  $0 actual and a $2.60 forecast.
 
 ### Railway
 
 - Active coordinator:
   `https://nemoclaw-coordinator-api-production.up.railway.app`
-- Live results at audit time: 41 radar rows, three evaluation rows, four episodic
+- Live results at audit time: 42 radar rows, four evaluation rows, four episodic
   rows.
 - The coordinator reports `idle` because `/api/status` describes its legacy
   in-process demo runner. The real AutoResearch worker runs on EC2. `/api/radar`
@@ -111,6 +119,18 @@ neutral. No local migration was used.
    go to Railway, Supabase, the UI, and Discord.
 7. **Weekly Feedback** — Sunday synthesis asks the human for approval or
    corrections; that feedback becomes the next digest.
+
+## Cursor and Claude integration
+
+- Cursor's functional work is integrated: the dedicated worker Terraform,
+  Prime evaluation demo, PC-only golden-set correction, and design-QA evidence.
+- Claude's resource work is integrated: EC2 lifecycle protection, Supabase
+  read-only tooling, Sage cron publishing, and the coordinator/UI data paths.
+- The later `restructure/clean-layout` branch was audited but not deployed. It
+  moves every runtime path and drops the Discord-to-Supabase seven-step additions
+  from `nightly_master_cycle.py`; merging it during a live run would break the
+  Vercel, cron, and EC2 paths. Its useful functional commit was cherry-picked
+  without the risky repository-wide rename.
 
 ## Communication map
 
