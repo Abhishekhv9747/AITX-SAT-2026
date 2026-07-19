@@ -5,10 +5,25 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from dashboard_api import _experiment_payload, _group_evaluation_samples, cached  # noqa: E402
+from dashboard_api import (  # noqa: E402
+    _experiment_payload,
+    _group_evaluation_samples,
+    cached,
+    evaluation_table,
+)
 
 
 class EvidencePayloadTest(unittest.TestCase):
+    def test_renamed_evaluation_table_is_preferred(self):
+        class Cursor:
+            def execute(self, _query, params):
+                self.table = params[0]
+
+            def fetchone(self):
+                return {"present": self.table == "evaluation_verifiers"}
+
+        self.assertEqual(evaluation_table(Cursor()), "evaluation_verifiers")
+
     def test_registry_links_only_explicit_episode(self):
         episode = {
             "episode_id": "discord:daily:1",

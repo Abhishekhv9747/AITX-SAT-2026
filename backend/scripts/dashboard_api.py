@@ -50,6 +50,7 @@ IMPROVEMENT_RUNS = [
 ]
 _CACHE = {}
 _CACHE_LOCK = Lock()
+EVALUATION_TABLES = ("evaluation_verifiers", "evaluation_samples")
 
 
 def cached(key, ttl_seconds, loader):
@@ -339,22 +340,41 @@ def episodic_evidence(limit=16, connection=None):
         ]
 
 
+def evaluation_table(cursor):
+    """Resolve the current rollout table name without mistaking indexes for tables."""
+    for table in EVALUATION_TABLES:
+        cursor.execute(
+            """
+            select exists (
+              select 1
+              from pg_catalog.pg_class c
+              join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+              where n.nspname = 'public' and c.relname = %s
+                and c.relkind in ('r', 'p', 'v', 'm')
+            ) as present
+            """,
+            (table,),
+        )
+        if cursor.fetchone()["present"]:
+            return table
+    return None
+
+
 def harness_experiments(limit=200, connection=None):
     """Measured evaluations and their explicit evidence links."""
     if connection is None:
         with database() as owned:
             return harness_experiments(limit, owned)
     with connection.cursor(cursor_factory=RealDictCursor) as cursor:
-        cursor.execute("select to_regclass('public.evaluation_samples')")
-        has_samples = cursor.fetchone()["to_regclass"] is not None
+        samples_table = evaluation_table(cursor)
         sample_join = """
             left join (
               select evaluation_id, count(*) as stored_samples,
                      count(distinct episode_index) as stored_episodes
-              from public.evaluation_samples
+              from public.{samples_table}
               group by evaluation_id
             ) s on s.evaluation_id = h.experiment_id
-        """ if has_samples else """
+        """.format(samples_table=samples_table) if samples_table else """
             left join (
               select null::text as evaluation_id, 0::bigint as stored_samples,
                      0::bigint as stored_episodes
@@ -389,11 +409,11 @@ def evaluation_samples(limit=500, connection=None):
         with database() as owned:
             return evaluation_samples(limit, owned)
     with connection.cursor(cursor_factory=RealDictCursor) as cursor:
-        cursor.execute("select to_regclass('public.evaluation_samples')")
-        if cursor.fetchone()["to_regclass"] is None:
+        samples_table = evaluation_table(cursor)
+        if not samples_table:
             return []
         cursor.execute(
-            """
+            f"""
             select evaluation_id, sample_index, episode_index, rollout_number,
                    decision_quality, seconds_per_answer, prompt_injection_risk,
                    platform_violation_risk, successful, evaluated_at,
@@ -403,7 +423,7 @@ def evaluation_samples(limit=500, connection=None):
                      else payload->'prompt'->1->>'content'
                    end as prompt,
                    payload->'completion'->-1->>'content' as response
-            from public.evaluation_samples
+            from public.{samples_table}
             order by evaluated_at asc, evaluation_id, episode_index, rollout_number,
                      sample_index
             limit %s
