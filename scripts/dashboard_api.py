@@ -49,10 +49,16 @@ def load_env():
 
 def database():
     """Use the linked hosted pooler because the direct Supabase host is IPv6-only here."""
-    pooler = (ROOT / "supabase/.temp/pooler-url").read_text().strip()
+    if database_url := os.getenv("DATABASE_URL"):
+        return psycopg2.connect(database_url, sslmode="require", connect_timeout=8)
+    pooler = os.getenv("SUPABASE_POOLER_URL")
+    if not pooler:
+        pooler = (ROOT / "supabase/.temp/pooler-url").read_text().strip()
     endpoint = pooler.rsplit("@", 1)[-1].split("/", 1)[0]
     host, port = endpoint.rsplit(":", 1)
-    project_ref = (ROOT / "supabase/.temp/project-ref").read_text().strip()
+    project_ref = os.getenv("SUPABASE_PROJECT_REF")
+    if not project_ref:
+        project_ref = (ROOT / "supabase/.temp/project-ref").read_text().strip()
     return psycopg2.connect(
         host=host,
         port=int(port),
@@ -204,6 +210,39 @@ def rsi_operations():
     }
 
 
+def rsi_idea_memory():
+    """Return successful lessons and promotion count from hosted Supabase."""
+    with database() as connection, connection.cursor(cursor_factory=RealDictCursor) as cursor:
+        cursor.execute(
+            """
+            select lesson, task_type, inserted_at
+            from public.episodes
+            where quality = 'good' and nullif(trim(lesson), '') is not null
+            order by inserted_at desc
+            limit 3
+            """
+        )
+        ideas = [
+            {key: json_value(value) for key, value in row.items()}
+            for row in cursor.fetchall()
+        ]
+        cursor.execute(
+            """
+            select count(*) as promoted_count
+            from public.rsi_runs
+            where lower(coalesce(decision, '')) in
+                  ('promote', 'promoted', 'accepted', 'champion')
+            """
+        )
+        promoted_count = cursor.fetchone()["promoted_count"]
+    return {
+        "status": "live",
+        "database": "hosted Supabase",
+        "promoted_count": promoted_count,
+        "ideas": ideas,
+    }
+
+
 def discord_rsi_messages():
     response = requests.get(
         f"https://discord.com/api/v10/channels/{DISCORD_RSI_CHANNEL_ID}/messages",
@@ -299,6 +338,13 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json(rsi_operations())
             except Exception as error:
                 self.send_json({"status": "invalid", "error": str(error)}, 422)
+            return
+
+        if parsed.path == "/api/rsi-ideas":
+            try:
+                self.send_json(rsi_idea_memory())
+            except Exception as error:
+                self.send_json({"status": "unavailable", "error": str(error), "ideas": []}, 503)
             return
 
         if parsed.path == "/api/discord-rsi":

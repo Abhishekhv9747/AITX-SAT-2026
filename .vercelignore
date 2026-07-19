@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+.git
+.vercel
+.codex
+design-qa*
+docs
+environments
+supabase
+dashboard/demos
