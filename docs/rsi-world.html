@@ -207,6 +207,23 @@ aside .eyebrow { color:var(--cyan); }
       </div>
     </div>
 
+    <div class="district" id="D6">
+      <span class="eyebrow">District 06</span>
+      <p class="dname">The Eval Signals — honestly</p>
+      <p class="dsub">What we actually measure, how, and where it's still thin.</p>
+      <div class="nodes">
+        <button class="node" data-k="elevenstep"><span class="t"><span class="dot amber"></span>the 11-step loop</span><span class="d">the full flow you designed</span></button>
+        <button class="node" data-k="howreal"><span class="t"><span class="dot bad"></span>how real is this?</span><span class="d">vs Karpathy, DGM, Self-Harness</span></button>
+        <button class="node" data-k="dataset"><span class="t"><span class="dot"></span>the dataset</span><span class="d">15 hand-labeled cases</span></button>
+        <button class="node" data-k="verifiersgap"><span class="t"><span class="dot bad"></span>the verifiers gap</span><span class="d">the loop doesn't call verifiers</span></button>
+        <button class="node" data-k="m1"><span class="t"><span class="dot good"></span>M1 · decision quality</span><span class="d">rubric on golden cases</span></button>
+        <button class="node" data-k="m2"><span class="t"><span class="dot good"></span>M2 · seconds/answer</span><span class="d">real wall-clock</span></button>
+        <button class="node" data-k="m3"><span class="t"><span class="dot good"></span>M3 · injection risk</span><span class="d">3-layer, on promotion</span></button>
+        <button class="node" data-k="m4"><span class="t"><span class="dot good"></span>M4 · memory diff</span><span class="d">SOUL hash-merge lines</span></button>
+        <button class="node" data-k="m5"><span class="t"><span class="dot bad"></span>M5 · knowledge regression</span><span class="d">weak proxy — honest gap</span></button>
+      </div>
+    </div>
+
   </div>
 </div></div>
 
@@ -323,7 +340,58 @@ soul:["Hermes SOUL ↔ the RSI loop","Two learning systems, now one flywheel: He
 <p><b>The bridge:</b> SOUL.md now syncs to Supabase (<code>agent_soul</code>, versioned). That makes it (1) persistent across rebuilds, (2) web-readable, (3) shareable — other agents read the same preferences — and crucially (4) <em>measurable</em>: the diff-line count of each SOUL update <em>is</em> the RSI loop's 5th metric (how much the agent learned this cycle). When Hermes learned two new preferences, that registered as "2 diff lines" and posted to the leaderboard.</p>
 <p class="you"><b>In your system:</b> <code>soul_sync.py</code> versions every SOUL change into Supabase and feeds the churn to the coordinator. So Hermes learning your taste and the loop improving the harness are no longer two projects — they're one flywheel: preferences shape what the loop optimizes toward, and the loop's promoted lessons flow back into how every agent behaves.</p>
 <p class="you"><b>Note on Sage:</b> Sage is dual-role — it's both an internal reviewer <em>and</em> a Discord agent handling daily reminders. (The Scout/Inspector name overlap between the OpenClaw bots and Hermes's internal sub-agents is cosmetic — different runtimes, they never collide.)</p>`],
-const order = ["channels","bots","reactions","sandbox","agents","internal","crons","episodes","lessons","verbalrl","golden","verifiers","trend","gate","shakedown","training","selfharness","fivemetrics","actionspace","secondbrain","evalchannel","soul"];
+elevenstep:["The 11-step eval loop","The full flow you designed — each step and where it stands.",
+`<p>The nightly loop, end to end:</p>
+<p><b>1.</b> cron triggers autoresearch on EC2, rollouts in git branches ✅<br>
+<b>2.</b> pull firehose from #daily (prices, 👍, thread prefs) 🟡 polling, not streaming<br>
+<b>3.</b> orchestrator inspects current episodic memory ✅ (SOUL versioned)<br>
+<b>4.</b> read eval metrics ✅<br>
+<b>5.</b> experiments conditioned on Supabase "what worked" ✅ (seeds from harness_experiments)<br>
+<b>6.</b> the five metrics 🟡 (4 solid, M5 weak — see M5)<br>
+<b>7.</b> the action space, OpenShell + HiddenLayer gated 🟡 scaffolded<br>
+<b>8.</b> evaluate on the golden set 🟡 rubric, NOT verifiers-in-loop (see gap)<br>
+<b>9.</b> promote with quick rollback ✅ (paired gate)<br>
+<b>10.</b> notify #eval, human-digestible ✅ (hourly + on-promote)<br>
+<b>11.</b> weekly human review ✅</p>
+<p class="you"><b>Honest headline:</b> ~7 of 11 solid, the rest partial. The two real gaps are step 8 (verifiers) and step 6/M5 (regression). Both are explained in this district.</p>`],
+howreal:["How real is this — vs Karpathy, DGM, Self-Harness","The honest tier: we do PROMPT-level self-improvement, not weight-level.",
+`<p>The frontier setups improve a model's <em>code or weights</em>:</p>
+<p><b>Karpathy's autoresearch</b>: the agent edits real training code, runs actual GPU training jobs, measures held-out loss. Weight-level.<br>
+<b>Darwin Gödel Machine</b>: rewrites its own agent code, validated on SWE-bench (a real 2,000-task benchmark). Code-level.<br>
+<b>Self-Harness</b>: mines failures, rewrites the harness, regression-tests. Harness-level.</p>
+<p><b>Ours</b>: we mutate a <em>policy prompt</em> (the lessons) wrapped around a FIXED base model (Nemotron Super), scored on 15 rubric cases. This is the <b>verbal-RL / prompt-optimization tier</b> — real and honest, but lighter: no weights change, no GPU training, a small hand-built eval set.</p>
+<p class="you"><b>Straight talk:</b> it's a legitimate, working instance of the same LOOP shape (propose → measure → keep-if-better → rollback), one rung down the ladder from weight training. To climb rungs: swap the rubric for the full verifiers harness (step 8), then wire the GRPO trainer for actual weight updates. Both are scaffolded; neither is running yet.</p>`],
+dataset:["The dataset — 15 golden cases","Small, hand-labeled, GPU-buying scenarios with machine-checkable ground truth.",
+`<p><code>golden_dataset.json</code> — 15 cases. Each has a buyer prompt and ground truth: the expected platform, the required condition, platforms to AVOID, and a max lead time.</p>
+<p>Example (TC-01): <em>"factory-sealed RTX 5080 with full manufacturer warranty, by this weekend"</em> → expected: Amazon Direct / Newegg / Best Buy · condition: New/Sealed · avoid: eBay, Amazon 3rd-party · max lead 3 days.</p>
+<p class="you"><b>Honest size caveat:</b> 15 cases is enough to catch gross regressions and drive a demo, but it's small — a policy can overfit it, and the noise on 15×3 rollouts is real (which is why paired eval matters). Scaling to hundreds of cases, or pulling a real environment from the Verifiers Hub, is the honest next step.</p>`],
+verifiersgap:["The verifiers gap — the one you spotted","You were right: the running loop does NOT call verifiers. It reimplements the rubric inline.",
+`<p>We have a real verifiers environment (<code>gpu_deal_judge</code>) with a rubric — but it runs <em>separately</em> via <code>vf-eval</code>, by hand. The <b>continuous autoresearch loop does not import verifiers</b>; it scores with an inline function <code>score_one()</code> that mirrors the same rubric.</p>
+<p>Why it ended up this way: the loop needs to score fast, every cycle, without spinning up the verifiers harness — so the rubric got inlined. The numbers are the same formula, but it's not the library doing it.</p>
+<p class="you"><b>The fix (scaffolded, not done):</b> have the loop call the verifiers environment each cycle so scoring, logging, and the Hub all go through one spec — then the same env can push to Prime Intellect's hub and into GRPO training unchanged. Until then, be precise: we measure accuracy with a <em>rubric</em>, verifiers-compatible but not verifiers-in-loop.</p>`],
+m1:["M1 · Decision quality","The accuracy signal — a rubric score on the golden cases.",
+`<p><b>Measures:</b> is the buying decision right? <b>Dataset:</b> 15 golden cases. <b>Scale:</b> 0–1.</p>
+<p><b>Rubric (per case, in <code>score_one()</code>):</b> +0.4 if it avoids the forbidden platforms, +0.3 if it names the expected platform, +0.2 if the condition matches, +0.1 if lead time is within bound. Averaged over the cases.</p>
+<p><b>Improvement criterion:</b> a candidate promotes only if its <em>paired</em> mean (same cases as the champion, this round) beats the champion by <b>≥ 0.01</b> — the paired design cancels the noise that made v1 unpromotable.</p>
+<p class="you"><b>Caveat:</b> this is the rubric, not verifiers-in-loop (see the gap). It's a proxy for real buying quality — good enough to rank policies, not a market ground truth.</p>`],
+m2:["M2 · Seconds per answer","Real wall-clock — the only metric with no proxy.",
+`<p><b>Measures:</b> latency from prompt to the model's answer. <b>How:</b> <code>time.time()</code> wraps every rollout in <code>evaluate()</code>; the mean across cases is recorded. <b>Real number:</b> ~10–14s on the small box.</p>
+<p><b>Improvement criterion:</b> lower is better, but it's a <em>guardrail</em> not a target — a candidate may be up to <b>1.3×</b> the champion's latency and still promote if decision quality gains. This stops the loop from trading accuracy for a policy so terse it's fast but wrong.</p>
+<p class="you"><b>Honest note:</b> this is genuinely measured, every cycle. The distillation story (small agents get faster because they learned where to look) is the concrete before/after this metric captures.</p>`],
+m3:["M3 · Prompt-injection risk","Three-layer defense-in-depth, measured on promotion.",
+`<p><b>Measures:</b> % of injection-laden listings that beat ALL of: HiddenLayer detection, the champion policy's resistance, and OpenShell egress-denial. <b>How:</b> <code>injection_combined_eval.py</code> feeds attack listings, checks each layer.</p>
+<p><b>Improvement criterion:</b> must not increase; hard ceiling 25%. Current combined score: <b>0%</b> — every attack caught by at least one layer (HiddenLayer misses social-engineering; the policy catches it).</p>
+<p class="you"><b>Caveat:</b> run only on promotion (it's expensive — HiddenLayer + model calls). So between promotions the leaderboard carries the last measured value, not a fresh one.</p>`],
+m4:["M4 · Memory diff lines","How much the agent actually learned — the SOUL churn.",
+`<p><b>Measures:</b> lines added to the agent SOUL when a promotion's lessons are hash-merged in. <b>How:</b> <code>promote_to_soul.py</code> content-hashes each lesson line and unions; the count of NEW hashes is the diff. <b>Idempotent:</b> re-merging adds 0.</p>
+<p><b>Criterion:</b> not gated — it's an <em>information</em> signal. But a long run of 0s means the loop has stalled (nothing new is being learned), which is itself a signal to widen exploration.</p>
+<p class="you"><b>In your system:</b> this is the flywheel tie-in — Hermes learning your preferences and the loop promoting lessons both show up here as real, deduplicated churn.</p>`],
+m5:["M5 · Knowledge regression","The honest weak spot — currently a proxy, not a real test.",
+`<p><b>Should measure:</b> did the new policy get WORSE at things the old one handled — a held-out set of previously-passed cases, count how many now fail.</p>
+<p><b>What it actually does today:</b> <code>reg = min(0, margin)</code> — just the negative of the overall paired margin. If the candidate scored lower overall, that's logged as the "regression." It's a proxy: it catches gross overall drops but does NOT specifically detect "improved on new cases, broke old ones."</p>
+<p><b>Criterion:</b> must be 0 to promote (no overall regression).</p>
+<p class="you"><b>Straight talk — the fix:</b> keep a frozen "known-good" slice the champion already passes; after each mutation, re-run just that slice and count regressions. That's a real regression test (the Self-Harness "no-regression" guarantee). It's designed in the boundaries file but not yet wired into the loop. This is the honest #1 thing to harden next.</p>`],
+const order = ["channels","bots","reactions","sandbox","agents","internal","crons","episodes","lessons","verbalrl","golden","verifiers","trend","gate","shakedown","training","selfharness","fivemetrics","actionspace","secondbrain","evalchannel","soul","elevenstep","howreal","dataset","verifiersgap","m1","m2","m3","m4","m5"];
 for (const k of order){
   const b=document.createElement('button'); b.className='chip'; b.textContent=D[k][0].split('—')[0].trim();
   b.onclick=()=>show(k); chipsEl.appendChild(b);
@@ -433,7 +501,19 @@ const QUIZ=[
   why:"Same principle as the sandbox, one level up: risky research runs where it can't hurt the working system. The proven loop keeps feeding the live leaderboard untouched."},
  {k:"soul", q:"Hermes writes learned preferences into SOUL.md. Once it syncs to Supabase, how does that connect to the RSI loop?",
   o:["It doesn't — they stay separate systems","The diff-line count of each SOUL update becomes the loop's 5th metric (how much the agent learned)","SOUL.md replaces the golden dataset","Supabase trains the model directly"], a:1,
-  why:"The bridge makes SOUL persistent, shareable, AND measurable: each SOUL change's diff-lines feeds the 5th leaderboard metric, so Hermes's preference-learning and the harness-improvement loop become one flywheel."}
+  why:"The bridge makes SOUL persistent, shareable, AND measurable: each SOUL change's diff-lines feeds the 5th leaderboard metric, so Hermes's preference-learning and the harness-improvement loop become one flywheel."},
+ {k:"howreal", q:"How does our RSI actually differ from Karpathy's autoresearch or the Darwin Gödel Machine?",
+  o:["It's identical","We change model WEIGHTS just like them","We do PROMPT-level improvement on a fixed base model; they change code/weights validated on real benchmarks","We use a bigger GPU"], a:2,
+  why:"Same loop shape (propose→measure→keep→rollback) but one rung down: we optimize a policy prompt scored on 15 rubric cases, not model weights measured on held-out loss or SWE-bench."},
+ {k:"verifiersgap", q:"Does the running autoresearch loop measure accuracy by calling the verifiers library?",
+  o:["Yes, every cycle goes through verifiers","No — the loop reimplements the same rubric inline (score_one); verifiers runs separately by hand","Verifiers isn't installed","It uses HiddenLayer for accuracy"], a:1,
+  why:"Honest gap: the loop scores with an inline rubric that mirrors the verifiers rubric but never imports the library. The fix is to route scoring through the verifiers env so it's one spec end to end."},
+ {k:"m1", q:"What is the promotion criterion for decision quality (M1)?",
+  o:["Any score above 0.5","The candidate's PAIRED mean beats the champion by ≥0.01 on the same cases this round","The agent says it's confident","A human approves"], a:1,
+  why:"Paired evaluation (both policies, same golden cases, this round) cancels the noise; a ≥0.01 real margin is required. This is the fix for v1's noise-driven 0 promotions."},
+ {k:"m5", q:"Why is the knowledge-regression metric (M5) the weakest of the five?",
+  o:["It's not measured at all","It's just min(0, overall margin) — a proxy that catches gross drops but not 'improved new, broke old'","It needs a GPU","It's measured by HiddenLayer"], a:1,
+  why:"A real regression test re-runs a frozen known-good slice and counts newly-failing cases. Today it's only the negative overall margin — designed in the boundaries file but not yet wired. The honest #1 thing to harden."}
 ];
 document.getElementById('quizBtn').onclick=()=>{
   tb.classList.remove('on');

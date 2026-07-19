@@ -16,24 +16,31 @@ from dashboard_api import (  # noqa: E402
     COORDINATOR_URL,
     IMPROVEMENT_RUNS,
     RSI_RUNS_CSV,
-    autoresearch_experiments,
     build_story,
+    cached_autoresearch_experiments,
     coordinator_json,
     database,
+    episodic_evidence,
+    harness_experiments,
     marketplace,
     measured_radar,
     rsi_idea_memory,
     rsi_operations,
+    soul_history,
     try_supabase_rsi_runs,
 )
 
 
 class handler(BaseHTTPRequestHandler):
-    def json(self, payload, status=200):
+    def json(self, payload, status=200, cache_seconds=0):
         body = json.dumps(payload, ensure_ascii=False).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Cache-Control", "no-store")
+        cache_control = (
+            f"public, max-age=0, s-maxage={cache_seconds}, stale-while-revalidate=300"
+            if cache_seconds and status == 200 else "no-store"
+        )
+        self.send_header("Cache-Control", cache_control)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -66,7 +73,8 @@ class handler(BaseHTTPRequestHandler):
 
         if route == "/autoresearch-experiments":
             try:
-                self.json(autoresearch_experiments())
+                full = query.get("detail", ["summary"])[0] == "full"
+                self.json(cached_autoresearch_experiments(full), cache_seconds=45)
             except Exception as error:
                 self.json({"error": str(error), "experiments": []}, 503)
             return
@@ -118,6 +126,19 @@ class handler(BaseHTTPRequestHandler):
                 self.json(rsi_idea_memory())
             except Exception as error:
                 self.json({"status": "unavailable", "error": str(error), "ideas": []}, 503)
+            return
+
+        if route == "/research-evidence":
+            try:
+                self.json({
+                    "status": "live",
+                    "database": "hosted Supabase",
+                    "episodes": episodic_evidence(),
+                    "experiments": harness_experiments(),
+                    "soul": soul_history(),
+                })
+            except Exception as error:
+                self.json({"status": "unavailable", "error": str(error), "episodes": []}, 503)
             return
 
         self.json({"error": "not found"}, 404)
