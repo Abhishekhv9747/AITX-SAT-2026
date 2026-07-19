@@ -40,7 +40,19 @@ def psql(sql):
 def channel(name):
     chans = requests.get(f"https://discord.com/api/v10/guilds/{GUILD}/channels",
                          headers=H, timeout=15).json()
-    return next((c["id"] for c in chans if c.get("name") == name), None)
+    c = next((c for c in chans if c.get("name") == name), None)
+    return (c["id"], c["type"]) if c else (None, None)
+
+
+def deliver(cid, ctype, title, content):
+    """Forum channels (type 15) need a thread with a title; text channels
+    (type 0) take a plain message."""
+    if ctype == 15:
+        return requests.post(f"https://discord.com/api/v10/channels/{cid}/threads",
+                             headers=H, timeout=15,
+                             json={"name": title[:90], "message": {"content": content[:1900]}})
+    return requests.post(f"https://discord.com/api/v10/channels/{cid}/messages",
+                         headers=H, timeout=15, json={"content": content[:1900]})
 
 
 def main():
@@ -63,11 +75,15 @@ def main():
         return f" {'▲' if d > 0 else '▼' if d < 0 else '–'}{abs(d):.3g}" if not good else \
                f" ✅{'▲' if d > 0 else '▼'}{abs(d):.3g}"
 
-    cid = channel("eval") or channel("gpu-desk")
+    cid, ctype = channel("eval")
+    if not cid:
+        cid, ctype = channel("gpu-desk")
     if not cid:
         print("no #eval or #gpu-desk channel")
         return
 
+    from datetime import datetime, timezone
+    title = f"RSI eval — {datetime.now(timezone.utc):%Y-%m-%d %H:%MZ}"
     if not latest:
         lines = ["📊 **RSI Eval Digest** — no harness experiments recorded yet.",
                  "The autoresearch loops write here as they run experiments."]
@@ -87,9 +103,8 @@ def main():
             "Promotion is automatic on a defensible, regression-free gain; "
             "rollback is automatic on a >2pt drop. Humans monitor here.",
         ]
-    requests.post(f"https://discord.com/api/v10/channels/{cid}/messages",
-                  headers=H, json={"content": "\n".join(lines)[:1900]}, timeout=15)
-    print("posted eval digest")
+    r = deliver(cid, ctype, title, "\n".join(lines))
+    print(f"posted eval digest ({'forum thread' if ctype == 15 else 'message'}): HTTP {r.status_code}")
 
 
 if __name__ == "__main__":
