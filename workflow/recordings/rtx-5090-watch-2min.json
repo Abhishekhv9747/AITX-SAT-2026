@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": 1,
+  "name": "rtx-5090-watch",
+  "replay_limit_seconds": 120,
+  "trigger": {
+    "channel": "#gpu-desk",
+    "bot": "NemoHermes",
+    "command": "!watch\nitem: RTX 5090 GPU\ntarget price: $1200\ntolerance: 10%\nmax wait: 4 months\nschedule: every 1 minute"
+  },
+  "confirmation": {
+    "required": true,
+    "button_label": "Confirm cron",
+    "schedule": "*/1 * * * *"
+  },
+  "agents": [
+    {
+      "name": "Scout",
+      "responsibility": "Read the approved database snapshot, then perform one bounded web-search fallback for current offers and trusted URLs.",
+      "timeout_seconds": 35
+    },
+    {
+      "name": "Inspector",
+      "responsibility": "Remove duplicates and unverified listings, classify fulfillment as Online or In-store / pickup, and select at most five offers.",
+      "timeout_seconds": 20
+    },
+    {
+      "name": "NemoHermes",
+      "responsibility": "Coordinate the handoff and format the final recommendation.",
+      "timeout_seconds": 10
+    },
+    {
+      "name": "Sage",
+      "responsibility": "Post the final recommendation once to #daily with feedback controls.",
+      "timeout_seconds": 10
+    }
+  ],
+  "steps": [
+    {
+      "id": "receive_watch_request",
+      "start_second": 0,
+      "deadline_second": 10,
+      "action": "NemoHermes parses the structured !watch command in #gpu-desk and stores the pending cron request."
+    },
+    {
+      "id": "confirm_cron",
+      "start_second": 10,
+      "deadline_second": 20,
+      "action": "The user selects Confirm cron; Hermes registers the one-minute schedule."
+    },
+    {
+      "id": "database_first",
+      "start_second": 20,
+      "deadline_second": 35,
+      "action": "Scout reads the Supabase deal snapshot and preferences from workflow/user.md."
+    },
+    {
+      "id": "scout_research",
+      "start_second": 35,
+      "deadline_second": 70,
+      "action": "Scout performs one bounded current-offer search and returns evidence with direct trusted URLs."
+    },
+    {
+      "id": "inspector_review",
+      "start_second": 70,
+      "deadline_second": 90,
+      "action": "Inspector reviews Scout evidence, rejects unsupported prices, and separates Online from In-store / pickup options."
+    },
+    {
+      "id": "compose_delivery",
+      "start_second": 90,
+      "deadline_second": 105,
+      "action": "NemoHermes creates a concise result with up to five verified entries and no internal IDs."
+    },
+    {
+      "id": "publish_daily",
+      "start_second": 105,
+      "deadline_second": 115,
+      "action": "Sage publishes exactly one message in #daily and adds Helpful and Not helpful controls."
+    },
+    {
+      "id": "record_feedback",
+      "start_second": 115,
+      "deadline_second": 120,
+      "action": "The post ID, timing, and feedback metadata are queued for Supabase reviews_feedback."
+    }
+  ],
+  "fallback": {
+    "condition": "Scout cannot verify a listing before its deadline.",
+    "output": "State that no verified listing currently meets the target band; retain only official availability or stock-check links.",
+    "must_not": [
+      "invent prices",
+      "publish an agent error",
+      "include job IDs or run IDs",
+      "post duplicate feedback controls"
+    ]
+  },
+  "delivery_contract": {
+    "destination": "#daily",
+    "heading": "Daily deals",
+    "maximum_entries": 5,
+    "online_entry": "Online, price, retailer, direct trusted product link",
+    "store_entry": "In-store / pickup, price, retailer, location or stock-check link",
+    "feedback_controls": ["Helpful", "Not helpful"]
+  },
+  "artifacts": {
+    "recording": "frontend/media/rtx-5090-watch.mp4",
+    "feedback_table": "reviews_feedback",
+    "preferences": "workflow/user.md"
+  },
+  "timing_report": {
+    "storage": "workflow_timings.json and GET /workflow-timings/latest",
+    "discord_command": "!timings",
+    "fields": ["agent", "started_at", "finished_at", "duration_ms", "status", "error"],
+    "agents": ["Scout", "Inspector", "NemoHermes", "Sage"],
+    "total_field": "total_duration_ms"
+  }
+}

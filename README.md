@@ -7,6 +7,14 @@
 >
 > Live Discord/Sage demo: [command-to-#daily result (MP4)](frontend/media/daily-discord-sage-live-demo.mp4)
 
+> RTX 5090 watch recording: [#gpu-desk request to #daily result (MP4)](frontend/media/rtx-5090-watch.mp4)
+
+Validate the bounded replay manifest with `python workflow/run_recording.py workflow/recordings/rtx-5090-watch-2min.json`; add `--queue` to submit its already-confirmed cron request to the local broker.
+
+In Discord, send `!run rtx-5090-watch` in `#gpu-desk`, then select **Confirm cron** to activate the recorded watch without running a terminal command.
+
+After a NemoHermes research run, send `!timings` in a NemoHermes channel to view the recorded Scout, Inspector, NemoHermes, Sage, and total durations. The latest machine-readable report is available at `GET /workflow-timings/latest`.
+
 ![teaser](autoresearch/progress.png)
 
 *One day, frontier AI research used to be done by meat computers in between eating, sleeping, having other fun, and synchronizing once in a while using sound wave interconnect in the ritual of "group meeting". That era is long gone. Research is now entirely the domain of autonomous swarms of AI agents running across compute cluster megastructures in the skies... This repo is the story of how it all began. —@karpathy, March 2026*

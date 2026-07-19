@@ -5,6 +5,7 @@ import threading
 import http.client
 import time
 import asyncio
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from uuid import uuid4
@@ -21,9 +22,19 @@ REQUEST_LOCK = threading.Lock()
 REQUESTS_PATH = Path(os.environ.get("CRON_BROKER_STATE_PATH", "/data/cron_requests.json"))
 FEEDBACK_LOCK = threading.Lock()
 FEEDBACK_PATH = Path(os.environ.get("HERMES_FEEDBACK_STATE_PATH", "/data/hermes_feedback.json"))
+TIMING_LOCK = threading.Lock()
+TIMINGS_PATH = Path(os.environ.get("HERMES_TIMING_STATE_PATH", "/data/workflow_timings.json"))
 CDT_UTC_OFFSET_HOURS = 5
 GPU_DESK_CHANNEL_ID = os.environ.get("DISCORD_GPU_DESK_CHANNEL_ID", "")
+NEMOHERMES_CHANNEL_IDS = {
+    channel_id.strip() for channel_id in os.environ.get(
+        "DISCORD_NEMOHERMES_CHANNEL_IDS", GPU_DESK_CHANNEL_ID
+    ).split(",") if channel_id.strip()
+}
 DEALS_COMMAND = re.compile(r"^!deals\s+(.+)$", re.I)
+WATCH_COMMAND = re.compile(r"^!watch\b", re.I)
+RECORDED_WATCH_COMMAND = re.compile(r"^!(?:run|replay)\s+rtx-5090-watch$", re.I)
+TIMINGS_COMMAND = re.compile(r"^!timings$", re.I)
 PUBLISH_TARGETS = {
     "/publish": ("DISCORD_DAILY_CHANNEL_ID", "DISCORD_SAGE_BOT_TOKEN", "[Sage daily update]"),
     "/publish/scout": (("DISCORD_SCOUT_RESEARCH_CHANNEL_ID", "DISCORD_SCOUT_Work_CHANNEL_ID"), "DISCORD_BOT_TOKEN_SCOUT", "[Scout research]"),
@@ -103,6 +114,63 @@ def parse_schedule(text):
     raise ValueError("supported schedules: every 15 minutes; every 2 hours; daily at 9am; weekdays at 17:30; weekly on monday at 9am; monthly on day 1 at 08:00 (all clock times are CDT)")
 
 
+def parse_watch_request(content):
+    """Parse the detailed, human-readable !watch Discord prompt."""
+    fields = {}
+    for line in content.splitlines()[1:]:
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        fields[key.strip().lower()] = value.strip()
+    item = fields.get("item") or fields.get("product")
+    target = fields.get("target price") or fields.get("price")
+    tolerance = fields.get("tolerance") or fields.get("price tolerance")
+    wait = fields.get("max wait") or fields.get("wait") or fields.get("horizon")
+    schedule = fields.get("schedule")
+    if not all([item, target, tolerance, wait, schedule]):
+        raise ValueError("include item, target price, tolerance, max wait, and schedule")
+    price_match = re.search(r"\$?\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)", target)
+    tolerance_match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*%", tolerance)
+    wait_match = re.search(r"([1-9][0-9]?)\s*months?", wait, re.I)
+    if not price_match or not tolerance_match or not wait_match:
+        raise ValueError("use a dollar target price, a percentage tolerance, and a wait period such as '4 months'")
+    price = float(price_match.group(1).replace(",", ""))
+    tolerance_pct = float(tolerance_match.group(1))
+    wait_months = int(wait_match.group(1))
+    if not 0 < price <= 50000 or not 0 <= tolerance_pct <= 50 or not 1 <= wait_months <= 24:
+        raise ValueError("price, tolerance, or wait period is outside the supported range")
+    parsed_schedule = parse_schedule(schedule)
+    slug = re.sub(r"[^a-z0-9]+", "-", item.lower()).strip("-")[:42] or "item"
+    low, high = price * (1 - tolerance_pct / 100), price * (1 + tolerance_pct / 100)
+    task_prompt = (
+        f"Monitor {item} for up to {wait_months} months. Target price is ${price:,.2f} "
+        f"with a +/- {tolerance_pct:g}% band (${low:,.2f}-${high:,.2f}). Scout must research "
+        f"current offers, Inspector must review them, and Sage must publish up to five verified "
+        f"Online or In-store / pickup options in #daily with direct/official stock links. Highlight "
+        f"offers inside the target band, otherwise report the closest trustworthy options."
+    )
+    return {
+        "name": f"watch-{slug}", "schedule": schedule, "parsed_schedule": parsed_schedule,
+        "item": item, "price": price, "tolerance_pct": tolerance_pct, "wait_months": wait_months,
+        "prompt": task_prompt,
+    }
+
+
+def recorded_rtx_5090_watch():
+    """Return the reviewed two-minute RTX 5090 watch configuration."""
+    watch = parse_watch_request(
+        "!watch\n"
+        "item: RTX 5090 GPU\n"
+        "target price: $1200\n"
+        "tolerance: 10%\n"
+        "max wait: 4 months\n"
+        "schedule: every 1 minute"
+    )
+    # Keep this user-triggered workflow distinct from any manually-created watch.
+    watch["name"] = "rtx-5090-watch"
+    return watch
+
+
 def load_requests():
     if not REQUESTS_PATH.exists():
         return []
@@ -130,6 +198,42 @@ def save_feedback(feedback):
     temporary = FEEDBACK_PATH.with_suffix(".tmp")
     temporary.write_text(json.dumps(feedback, indent=2))
     temporary.replace(FEEDBACK_PATH)
+
+
+def load_timing_reports():
+    if not TIMINGS_PATH.exists():
+        return []
+    try:
+        return json.loads(TIMINGS_PATH.read_text())
+    except (OSError, json.JSONDecodeError):
+        return []
+
+
+def record_timing_report(report):
+    """Persist bounded, non-sensitive per-agent timing data for workflow review."""
+    with TIMING_LOCK:
+        reports = load_timing_reports()
+        reports.append(report)
+        TIMINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        temporary = TIMINGS_PATH.with_suffix(".tmp")
+        temporary.write_text(json.dumps(reports[-200:], indent=2))
+        temporary.replace(TIMINGS_PATH)
+
+
+def timed_agent(report, agent, work):
+    started_clock = time.perf_counter()
+    started_at = datetime.now(timezone.utc).isoformat()
+    entry = {"agent": agent, "started_at": started_at, "status": "succeeded", "error": None}
+    try:
+        return work()
+    except Exception as error:
+        entry["status"] = "failed"
+        entry["error"] = str(error)[:300]
+        raise
+    finally:
+        entry["finished_at"] = datetime.now(timezone.utc).isoformat()
+        entry["duration_ms"] = round((time.perf_counter() - started_clock) * 1000, 1)
+        report["agents"].append(entry)
 
 
 def write_review_feedback(event):
@@ -425,14 +529,16 @@ def database_candidates(question, limit=5):
     return [{"origin": "linked database", **row} for row in rows]
 
 
-def research_pipeline(question):
+def research_pipeline(question, timing_report=None):
     """Use database matches first; Scout web-searches only the missing slots."""
+    report = timing_report if timing_report is not None else {"agents": []}
+    scout_started = time.perf_counter()
     database_rows = database_candidates(question, 5)
     web_slots = max(0, 5 - len(database_rows))
     web_sources = tavily_research(question, web_slots) if web_slots else []
     feedback_summary = recent_feedback_context()
     memory_summary = shared_memory_context()
-    scout = openrouter_turn(
+    scout = timed_agent(report, "Scout", lambda: openrouter_turn(
         "You are Scout, NemoHermes's private product-research subagent. Start with the supplied linked-database listings. "
         "They are the preferred candidates. Web evidence is supplied only to fill any missing slots. Select the five most appropriate, distinct candidates where evidence supports them, retaining database candidates when appropriate. "
         "Return concise candidate facts with exact URLs, price/stock evidence, fulfillment type, and official local-stock URLs when present. Do not recommend a purchase or invent missing facts.",
@@ -440,21 +546,23 @@ def research_pipeline(question):
         f"\n\nRECENT AGGREGATED USER FEEDBACK:\n{json.dumps(feedback_summary, default=str)}"
         f"\n\nLINKED DATABASE CANDIDATES ({len(database_rows)}):\n{json.dumps(database_rows, default=str)}"
         f"\n\nWEB FILLER EVIDENCE ({len(web_sources)}):\n{json.dumps(web_sources)}",
-    )
-    inspector = openrouter_turn(
+    ))
+    # Include database and bounded web lookup time in Scout's recorded task.
+    report["agents"][-1]["duration_ms"] = round((time.perf_counter() - scout_started) * 1000, 1)
+    inspector = timed_agent(report, "Inspector", lambda: openrouter_turn(
         "You are Inspector, NemoHermes's private review subagent. Review only Scout's evidence; do not browse or add offers. "
         "Flag untrusted, indirect, stale, contradictory, duplicate, or unsupported links. Verify that linked-database candidates were considered before web filler and state which five or fewer candidates are safe to present.",
         f"USER QUESTION:\n{question}\n\nSHARED RECENT USER CONTEXT:\n{json.dumps(memory_summary, default=str)}"
         f"\n\nRECENT AGGREGATED USER FEEDBACK:\n{json.dumps(feedback_summary, default=str)}\n\nSCOUT EVIDENCE:\n{scout}",
-    )
-    return openrouter_turn(
+    ))
+    return timed_agent(report, "NemoHermes", lambda: openrouter_turn(
         "You are NemoHermes, the sole user-facing Discord assistant. Use Scout and Inspector below; do not mention internal agents. "
         "Return exactly five appropriate, distinct options when the evidence supports five; otherwise state why fewer verified options are available. Prefer appropriate linked-database entries, then use web results only to fill the remainder. "
         "Keep the complete response below 1,700 characters. Each option must be labelled **Online** or **In-store / pickup**. Online options need a trusted direct clickable URL. "
         "In-store options need a location (or selected-store caveat) plus a trusted official stock-check/store-locator URL. State unavailable or unverified stock plainly. "
         "Do not include run IDs, raw research, or tool traces.",
         f"USER QUESTION:\n{question}\n\nSCOUT:\n{scout}\n\nINSPECTOR:\n{inspector}",
-    )
+    ))
 
 
 def read_query(sql):
@@ -592,6 +700,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if self.path == "/workflow-timings/latest":
+            with TIMING_LOCK:
+                reports = load_timing_reports()
+            self.reply(200, reports[-1] if reports else {"available": False})
+            return
         if self.path == "/cron-requests/next":
             with REQUEST_LOCK:
                 requests = load_requests()
@@ -732,10 +845,15 @@ class FeedbackView(discord.ui.View):
 class CronConfirmationView(discord.ui.View):
     """Require the requesting Discord user to approve a parsed cron schedule."""
 
-    def __init__(self, schedule, requester_id):
+    def __init__(self, schedule, requester_id, name="daily-deals", prompt=None):
         super().__init__(timeout=900)
         self.schedule = schedule
         self.requester_id = requester_id
+        self.name = name
+        self.prompt = prompt or (
+            "Run the daily-deals workflow. Scout researches current offers, Inspector reviews "
+            "Scout's evidence, and Sage publishes a concise linked #daily digest."
+        )
 
     async def _require_requester(self, interaction):
         if interaction.user.id == self.requester_id:
@@ -750,17 +868,12 @@ class CronConfirmationView(discord.ui.View):
         try:
             request = queue_request({
                 "confirmed": True,
-                "name": "daily-deals",
+                "name": self.name,
                 "schedule": self.schedule,
                 "timezone": "CDT",
                 "requested_by": str(interaction.user.id),
                 "workflow": "daily-deals",
-                "prompt": (
-                    "Run the daily-deals workflow. Scout researches current offers, Inspector reviews "
-                    "Scout's evidence, and Sage publishes a concise linked #daily digest. Label every "
-                    "recommendation Online or In-store / pickup; use verified direct links and official "
-                    "stock-check/store-locator links for in-store options. Never include internal IDs."
-                ),
+                "prompt": self.prompt,
             })
             await interaction.response.edit_message(
                 content="NemoHermes queued the daily-deals job. Hermes will create it and Sage will publish the result in #daily.",
@@ -783,10 +896,10 @@ class NemoHermesClient(discord.Client):
         self.add_view(FeedbackView())
 
     async def on_ready(self):
-        print(f"NemoHermes coordinator connected as {self.user}; gpu_desk={GPU_DESK_CHANNEL_ID}", flush=True)
+        print(f"NemoHermes coordinator connected as {self.user}; channels={sorted(NEMOHERMES_CHANNEL_IDS)}", flush=True)
 
     async def on_message(self, message):
-        if message.author.bot or str(message.channel.id) != GPU_DESK_CHANNEL_ID:
+        if message.author.bot or str(message.channel.id) not in NEMOHERMES_CHANNEL_IDS:
             return
         content = message.content.strip()
         if not content:
@@ -794,6 +907,50 @@ class NemoHermesClient(discord.Client):
         # The Discord message ID is the canonical cross-bot memory key.  If
         # NemoClaw sees the same message later, its insert is a no-op.
         await asyncio.to_thread(record_discord_memory, message, "nemohermes")
+        if TIMINGS_COMMAND.fullmatch(content):
+            with TIMING_LOCK:
+                reports = load_timing_reports()
+            if not reports:
+                await message.reply("No workflow timing report is available yet.", mention_author=False)
+                return
+            report = reports[-1]
+            lines = ["**Latest workflow timings**"]
+            for entry in report.get("agents", []):
+                marker = "ok" if entry["status"] == "succeeded" else "failed"
+                lines.append(f"- {entry['agent']}: {entry['duration_ms'] / 1000:.2f}s ({marker})")
+            lines.append(f"- Total: {report['total_duration_ms'] / 1000:.2f}s")
+            await message.reply("\n".join(lines), mention_author=False)
+            return
+        if RECORDED_WATCH_COMMAND.fullmatch(content):
+            if not GPU_DESK_CHANNEL_ID or str(message.channel.id) != GPU_DESK_CHANNEL_ID:
+                await message.reply("Run this command in #gpu-desk.", mention_author=False)
+                return
+            watch = recorded_rtx_5090_watch()
+            parsed = watch["parsed_schedule"]
+            await message.reply(
+                f"I loaded the **{watch['item']}** watch: target **${watch['price']:,.2f}** "
+                f"(+/- {watch['tolerance_pct']:g}%), for up to **{watch['wait_months']} months**, "
+                f"{parsed['description']}. Scout and Inspector will review each run, and Sage will post to #daily. Confirm before I activate it.",
+                view=CronConfirmationView(watch["schedule"], message.author.id, watch["name"], watch["prompt"]),
+                mention_author=False,
+            )
+            return
+        if WATCH_COMMAND.match(content):
+            try:
+                watch = parse_watch_request(content)
+                parsed = watch["parsed_schedule"]
+                await message.reply(
+                    f"I parsed a **{watch['item']}** watch: target **${watch['price']:,.2f}** "
+                    f"(+/- {watch['tolerance_pct']:g}%), for up to **{watch['wait_months']} months**, "
+                    f"{parsed['description']}. Scout and Inspector will review each run, and Sage will post to #daily. Confirm before I activate it.",
+                    view=CronConfirmationView(watch["schedule"], message.author.id, watch["name"], watch["prompt"]),
+                    mention_author=False,
+                )
+            except Exception as error:
+                await message.reply(
+                    f"I could not parse that watch request: {error}", mention_author=False
+                )
+            return
         match = DEALS_COMMAND.fullmatch(content)
         if match:
             try:
@@ -807,11 +964,44 @@ class NemoHermesClient(discord.Client):
                 await message.reply(f"I could not parse that schedule: {error}", mention_author=False)
             return
         try:
+            run_started = time.perf_counter()
+            report = {
+                "id": uuid4().hex,
+                "workflow": "discord-research",
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "channel_id": str(message.channel.id),
+                "agents": [],
+            }
             async with message.channel.typing():
-                answer = await asyncio.to_thread(research_pipeline, content)
-            await message.reply(answer[:1800], view=FeedbackView(), mention_author=False)
+                answer = await asyncio.to_thread(research_pipeline, content, report)
+            sage_started = time.perf_counter()
+            sage_started_at = datetime.now(timezone.utc).isoformat()
+            try:
+                await message.reply(answer[:1800], view=FeedbackView(), mention_author=False)
+                sage_status, sage_error = "succeeded", None
+            except Exception as error:
+                sage_status, sage_error = "failed", str(error)[:300]
+                raise
+            finally:
+                report["agents"].append({
+                    "agent": "Sage",
+                    "started_at": sage_started_at,
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "duration_ms": round((time.perf_counter() - sage_started) * 1000, 1),
+                    "status": sage_status,
+                    "error": sage_error,
+                })
+            report["status"] = "succeeded"
         except Exception as error:
+            if "report" in locals():
+                report["status"] = "failed"
+                report["error"] = str(error)[:300]
             await message.reply(f"I could not complete the Scout and Inspector review: {error}", mention_author=False)
+        finally:
+            if "report" in locals():
+                report["finished_at"] = datetime.now(timezone.utc).isoformat()
+                report["total_duration_ms"] = round((time.perf_counter() - run_started) * 1000, 1)
+                await asyncio.to_thread(record_timing_report, report)
 
 
 class SageClient(discord.Client):
@@ -908,7 +1098,7 @@ def run_sage_gateway():
 
 
 def run_nemohermes_gateway():
-    if not GPU_DESK_CHANNEL_ID or not os.environ.get("DISCORD_NEMOHERMES_BOT_TOKEN"):
+    if not NEMOHERMES_CHANNEL_IDS or not os.environ.get("DISCORD_NEMOHERMES_BOT_TOKEN"):
         print("NemoHermes coordinator disabled: Discord channel or token is not configured", flush=True)
         return
     intents = discord.Intents.default()
