@@ -51,6 +51,15 @@ resource "aws_security_group" "agent_host" {
     ipv6_cidr_blocks = ["::/0"]
   }
 
+  ingress {
+    description      = "Live autoresearch leaderboard (read-only page + /radar)"
+    from_port        = 8787
+    to_port          = 8787
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
   egress {
     from_port        = 0
     to_port          = 0
@@ -62,6 +71,17 @@ resource "aws_security_group" "agent_host" {
 
 # The account's VPC has a restrictive subnet NACL (allows only 6379 +
 # ephemeral). Add SSH to it; rule is Terraform-managed and removed on destroy.
+resource "aws_network_acl_rule" "leaderboard_in" {
+  network_acl_id = "acl-0e5ab1f5cc5480f8c"
+  rule_number    = 91
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 8787
+  to_port        = 8787
+}
+
 resource "aws_network_acl_rule" "ssh_in" {
   network_acl_id = "acl-0e5ab1f5cc5480f8c"
   rule_number    = 90
@@ -91,6 +111,13 @@ resource "aws_instance" "agent_host" {
     Name     = "aitx-agent-host"
     project  = "aitx-sat-2026"
     lifetime = "self-stops-2026-07-20"
+  }
+
+  # Never replace the running box just because Canonical published a newer
+  # Ubuntu AMI or the user-data file changed — a replace would wipe the live
+  # stack (sandbox, autoresearch, search-cache). The box self-stops July 20.
+  lifecycle {
+    ignore_changes = [ami, user_data]
   }
 }
 
