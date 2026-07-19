@@ -1,5 +1,5 @@
 # Custom NemoClaw policy preset: sandbox -> host search-cache micro-service.
-# The service runs on the EC2 host at the sandbox egress bridge (10.200.0.1),
+# The service runs on the EC2 host at the sandbox egress bridge (172.18.0.1),
 # holds the DB creds, and proxies search_cache read/write. Agents stay
 # credential-free. Apply with:
 #   nemoclaw openclaw policy-add --from-file /deploy/config/policies/search-cache.yaml --yes
@@ -12,7 +12,7 @@ network_policies:
   search-cache:
     name: search-cache
     endpoints:
-      - host: 10.200.0.1
+      - host: 172.18.0.1
         port: 8787
         protocol: rest
         enforcement: enforce
