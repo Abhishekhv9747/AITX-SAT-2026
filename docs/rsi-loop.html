@@ -1,0 +1,183 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The 11-Step RSI Loop — real vs theoretical</title>
+<style>
+:root{
+  --paper:#f4f1ea; --ink:#22201b; --ink2:#57534a; --muted:#8a8578; --rule:#d9d3c6;
+  --card:#fbf9f4; --green:#3f7d54; --amber:#b07a1e; --red:#a4472f; --accent:#7a3b2e;
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme=light])){ --paper:#191713; --ink:#efe9dd; --ink2:#c3bcac; --muted:#8f897a;
+    --rule:#332f27; --card:#211e19; --green:#6fae82; --amber:#d6a24e; --red:#d0715a; --accent:#d8927f; }
+}
+:root[data-theme=dark]{ --paper:#191713; --ink:#efe9dd; --ink2:#c3bcac; --muted:#8f897a; --rule:#332f27;
+  --card:#211e19; --green:#6fae82; --amber:#d6a24e; --red:#d0715a; --accent:#d8927f; }
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font:16px/1.55 "Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:1.6rem 1.4rem 3rem}
+header{border-bottom:1px solid var(--rule);padding-bottom:1rem;margin-bottom:1.4rem}
+.kick{font:600 .66rem/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:2rem;margin:.35rem 0 .2rem;font-weight:600;letter-spacing:-.01em}
+.sub{color:var(--ink2);font-size:.95rem;max-width:60ch}
+.legend{display:flex;gap:1.2rem;flex-wrap:wrap;margin-top:.8rem;font:600 .74rem/1 ui-monospace,Menlo,monospace;color:var(--ink2)}
+.legend span{display:inline-flex;align-items:center;gap:.4rem}
+.dot{width:9px;height:9px;border-radius:50%}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:1.6rem;align-items:start}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+#ring{width:100%;height:auto;display:block}
+.node{cursor:pointer}
+.node circle{transition:r .15s,stroke-width .15s}
+.node text{font:600 15px ui-monospace,Menlo,monospace;fill:var(--paper)}
+.node .lbl{font:500 11px "Iowan Old Style",Georgia,serif;fill:var(--ink2)}
+.node:hover circle,.node.on circle{stroke:var(--ink);stroke-width:2.5}
+.center{font:600 13px ui-monospace,Menlo,monospace;fill:var(--muted);letter-spacing:.1em}
+aside{position:sticky;top:1rem;background:var(--card);border:1px solid var(--rule);border-radius:8px;padding:1.2rem 1.3rem}
+.badge{display:inline-block;font:700 .64rem/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;
+  text-transform:uppercase;padding:.34rem .5rem;border-radius:4px;color:var(--paper)}
+#dNo{font:600 .7rem/1 ui-monospace,Menlo,monospace;color:var(--muted);letter-spacing:.14em}
+#dTitle{font-size:1.28rem;font-weight:600;margin:.3rem 0 .7rem;letter-spacing:-.01em;text-wrap:balance}
+.sec{margin:.85rem 0}
+.sec h3{font:700 .66rem/1 ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 .3rem}
+.sec p{margin:0;font-size:.9rem;color:var(--ink2)}
+.real{border-left:2px solid var(--green);padding-left:.6rem}
+.theo{border-left:2px solid var(--red);padding-left:.6rem}
+.ref{display:block;font-size:.84rem;color:var(--ink2);margin-top:.15rem}
+.ref b{color:var(--ink);font-weight:600}
+.ref a{color:var(--accent);text-decoration:none;border-bottom:1px solid var(--rule)}
+code{font-family:ui-monospace,Menlo,monospace;font-size:.82em;background:color-mix(in srgb,var(--accent) 10%,transparent);padding:.06em .32em;border-radius:3px}
+.hint{color:var(--muted);font-size:.8rem;font-style:italic}
+</style>
+<div class="wrap">
+<header>
+  <span class="kick">AITX SAT 2026 · Recursive Self-Improvement</span>
+  <h1>The 11-Step RSI Loop</h1>
+  <p class="sub">Every step of the nightly self-improvement cycle, arranged as the loop it actually runs. Click a number for what's <em>really working</em>, what's still <em>theoretical</em>, and the research paper &amp; GitHub repo it's measured against.</p>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--green)"></i>Working</span>
+    <span><i class="dot" style="background:var(--amber)"></i>Partial</span>
+    <span><i class="dot" style="background:var(--red)"></i>Theoretical</span>
+  </div>
+</header>
+<div class="grid">
+  <svg id="ring" viewBox="0 0 620 620" aria-label="11-step loop"></svg>
+  <aside>
+    <div id="dNo">STEP 01</div>
+    <div id="dTitle">Cron triggers autoresearch</div>
+    <span class="badge" id="dBadge">Working</span>
+    <div class="sec"><h3>What's real</h3><p class="real" id="dReal"></p></div>
+    <div class="sec"><h3>What's theoretical</h3><p class="theo" id="dTheo"></p></div>
+    <div class="sec"><h3>Measured against</h3>
+      <span class="ref" id="dPaper"></span>
+      <span class="ref" id="dRepo"></span></div>
+    <p class="hint">Click any step on the ring, or press → / ← to walk the loop.</p>
+  </aside>
+</div>
+</div>
+<script>
+const S=[
+ {n:"01",t:"Cron triggers autoresearch on EC2",st:"work",
+  real:"A systemd loop on a dedicated t3.small box runs continuously; each experiment is an isolated git branch (mutate → eval → keep/discard). Verified live: 0 restarts, cycles every ~10 min.",
+  theo:"Nothing — this step is fully operational.",
+  paper:["Karpathy, <b>autoresearch</b> (2026): AI agents running research on nanochat, rollouts iterated automatically.","https://github.com/karpathy/autoresearch"],
+  repo:["Ours mirrors the branch-per-rollout pattern; the difference is we mutate a policy, not training code.","autoresearch/scripts/autoresearch_v2.py"]},
+ {n:"02",t:"Live firehose from #daily",st:"part",
+  real:"Each cycle pulls #daily messages, active threads, replies and 👍 reactions into Supabase episodes — the feedback signal.",
+  theo:"True streaming. It POLLS on a schedule, not a persistent Discord Gateway listener — so it's near-live, not live.",
+  paper:["Park et al., <b>Generative Agents</b> (2023): a memory stream of observations feeding behavior — the model for turning interaction into signal.","https://arxiv.org/abs/2304.03442"],
+  repo:["We persist reactions/threads as episodes; a Gateway websocket for true push is the remaining build.","backend/supabase — episodes table"]},
+ {n:"03",t:"Orchestrator evaluates episodic memory",st:"work",
+  real:"Hermes SOUL.md is versioned in Supabase (agent_soul); the loop reads the exact diff of what changed, so 'what does the agent currently believe' is a first-class, queryable object.",
+  theo:"Nothing here — SOUL versioning is live and hash-deduped.",
+  paper:["Shinn et al., <b>Reflexion</b> (2023): verbal self-reflection stored and re-read — improvement without weight updates.","https://arxiv.org/abs/2303.11366"],
+  repo:["Our verbal-RL memory is the direct implementation of Reflexion's stored-lessons idea.","autoresearch/scripts/soul_sync.py"]},
+ {n:"04",t:"Read the eval metrics",st:"work",
+  real:"Every candidate is scored and the five metrics are recorded to Supabase harness_experiments + the live radar each cycle.",
+  theo:"Nothing — metrics are read and logged every cycle.",
+  paper:["Prime Intellect, <b>verifiers</b>: RolloutOutput carries reward + metrics + timing per rollout.","https://github.com/PrimeIntellect-ai/verifiers"],
+  repo:["We record the same metric shape; see the verifiers gap at step 8 for the honest caveat.","harness_experiments (Supabase)"]},
+ {n:"05",t:"Experiments conditioned on what worked",st:"work",
+  real:"Each mutation is seeded with the accepted hypotheses from harness_experiments — the researcher literally reads prior winners from Supabase before proposing.",
+  theo:"Richer strategy-weighting (e.g. bandit over action types) — today it's a simple recency-ranked seed list.",
+  paper:["Zhao et al., <b>ExpeL</b> (2023): an agent that gathers experience and extracts reusable insights across tasks.","https://arxiv.org/abs/2308.10144"],
+  repo:["seed_hypotheses() pulls the last 12 accepted experiments as idea fuel.","autoresearch_v2.py :: seed_hypotheses"]},
+ {n:"06",t:"The five eval metrics",st:"part",
+  real:"Decision quality (rubric), seconds/answer (real wall-clock), injection risk (3-layer), memory diff (SOUL churn) are all genuinely measured.",
+  theo:"M5, knowledge regression, is a proxy — min(0, margin), not a held-out regression test. Four of five are solid; the fifth is honest-weak.",
+  paper:["Liang et al., <b>HELM</b> (2022): multi-metric evaluation — accuracy is not enough; measure many axes together.","https://arxiv.org/abs/2211.09110"],
+  repo:["Four metrics real, M5 needs a frozen known-good slice re-run.","autoresearch/improvement-boundaries.json"]},
+ {n:"07",t:"Action space, OpenShell + HiddenLayer gated",st:"theo",
+  real:"The registry exists (harness_experiments.action), OpenShell egress policies are live, and HiddenLayer scores injection at the boundary. update_episodic_memory runs automatically.",
+  theo:"The interesting actions — search the Verifiers Hub, swap a harness component, distill to a smaller model — are scaffolded but NOT yet executed by the loop. They're behind human approval for now.",
+  paper:["Shanghai AI Lab, <b>Self-Harness</b> (2026): an agent rewrites its own harness, failure-mining → propose → regression-test.","https://arxiv.org/html/2606.09498v1"],
+  repo:["Action taxonomy + gates are designed; the executors for hub-search / component-swap are the frontier.","improvement-boundaries.json :: allowed_actions"]},
+ {n:"08",t:"Evaluate with verifiers on the golden set",st:"part",
+  real:"A 15-case golden dataset with machine-checkable ground truth; a rubric scores every rollout (safe platform 0.4, right platform 0.3, condition 0.2, lead time 0.1).",
+  theo:"Verifiers-IN-loop. The running loop reimplements the rubric inline (score_one) — it does NOT import the verifiers library. The real verifiers env runs separately via vf-eval, by hand.",
+  paper:["Prime Intellect, <b>verifiers</b> + Environments Hub (2,500+ envs): one spec for eval and RL training.","https://github.com/PrimeIntellect-ai/verifiers"],
+  repo:["The env exists (gpu_deal_judge); wiring it INTO the loop is the #1 credibility fix.","autoresearch/environments/gpu_deal_judge"]},
+ {n:"09",t:"Promote with quick rollback",st:"work",
+  real:"Paired evaluation (champion + candidate on the SAME cases each round) cancels noise; promote on a ≥0.01 real margin, auto-rollback on a drop. This fixed v1's 0-promotion stall.",
+  theo:"Nothing — the gate is live and correct; it rejects genuinely-worse mutations and keeps real gains.",
+  paper:["Sakana AI, <b>Darwin Gödel Machine</b> (2025): keep a change only on EMPIRICAL evidence it helps, validated on a benchmark.","https://arxiv.org/abs/2505.22954"],
+  repo:["Our paired frozen-benchmark gate is DGM's 'evidence not proof' at the prompt tier.","autoresearch_v2.py :: main (paired gate)"]},
+ {n:"10",t:"Notify #eval, human-digestible",st:"work",
+  real:"Every promotion + an hourly heartbeat opens a titled thread in the #eval Discord forum with the five-metric card. Verified: 4 threads live.",
+  theo:"Nothing — posting is automated (hourly cron + on-promote).",
+  paper:["Ouyang et al., <b>InstructGPT/RLHF</b> (2022): humans oversee and steer, they don't hand-label every step.","https://arxiv.org/abs/2203.02155"],
+  repo:["Humans monitor #eval; they never gate the nightly cycle.","autoresearch/scripts/post_eval_digest.py"]},
+ {n:"11",t:"Weekly human review by an agent",st:"work",
+  real:"On Sundays an agent synthesizes the week's tournaments into a ≤180-word report and asks for approval/feedback in Discord; replies flow back into episodic memory.",
+  theo:"Nothing — the weekly synthesis is scheduled and closes the human-feedback loop.",
+  paper:["Bai et al., <b>Constitutional AI</b> (2022): periodic principled human/AI oversight rather than constant intervention.","https://arxiv.org/abs/2212.08073"],
+  repo:["Sunday branch of the nightly master cycle.","autoresearch/scripts/nightly_master_cycle.py"]},
+];
+const COL={work:"var(--green)",part:"var(--amber)",theo:"var(--red)"};
+const BADGE={work:"Working",part:"Partial",theo:"Theoretical"};
+const ring=document.getElementById('ring');
+const cx=310,cy=310,R=232;
+const NS="http://www.w3.org/2000/svg";
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+// loop arrows (arc between consecutive nodes)
+const ang=i=>-Math.PI/2+i*2*Math.PI/S.length;
+ring.appendChild(el('circle',{cx,cy,r:R,fill:'none',stroke:'var(--rule)','stroke-width':1.5}));
+// direction arc marker
+const defs=el('defs',{});const mk=el('marker',{id:'ar',viewBox:'0 0 10 10',refX:8,refY:5,markerWidth:6,markerHeight:6,orient:'auto-start-reverse'});
+mk.appendChild(el('path',{d:'M0,0 L10,5 L0,10 z',fill:'var(--muted)'}));defs.appendChild(mk);ring.appendChild(defs);
+for(let i=0;i<S.length;i++){
+  const a0=ang(i)+0.28,a1=ang(i+1)-0.28;
+  const p=el('path',{d:`M ${cx+R*Math.cos(a0)} ${cy+R*Math.sin(a0)} A ${R} ${R} 0 0 1 ${cx+R*Math.cos(a1)} ${cy+R*Math.sin(a1)}`,
+    fill:'none',stroke:'var(--muted)','stroke-width':1.2,'marker-end':'url(#ar)',opacity:.5});
+  ring.appendChild(p);
+}
+ring.appendChild(el('text',{x:cx,y:cy-8,'text-anchor':'middle',class:'center'},)).textContent='NIGHTLY';
+const c2=el('text',{x:cx,y:cy+12,'text-anchor':'middle',class:'center'});c2.textContent='RSI LOOP';ring.appendChild(c2);
+S.forEach((s,i)=>{
+  const a=ang(i),x=cx+R*Math.cos(a),y=cy+R*Math.sin(a);
+  const g=el('g',{class:'node',tabindex:0});g.dataset.i=i;
+  g.appendChild(el('circle',{cx:x,cy:y,r:23,fill:COL[s.st],stroke:'var(--paper)','stroke-width':2}));
+  const tx=el('text',{x,y:y+5,'text-anchor':'middle'});tx.textContent=s.n;g.appendChild(tx);
+  // label outside
+  const lx=cx+(R+42)*Math.cos(a),ly=cy+(R+42)*Math.sin(a);
+  const words=s.t.split(' ');const short=words.slice(0,3).join(' ')+(words.length>3?'…':'');
+  const lbl=el('text',{x:lx,y:ly,'text-anchor':Math.abs(Math.cos(a))<0.35?'middle':(Math.cos(a)>0?'start':'end'),class:'lbl'});
+  lbl.textContent=short;g.appendChild(lbl);
+  g.onclick=()=>show(i);g.onkeydown=e=>{if(e.key==='Enter')show(i);};
+  ring.appendChild(g);
+});
+let cur=0;
+function show(i){
+  cur=i;const s=S[i];
+  document.querySelectorAll('.node').forEach(n=>n.classList.toggle('on',+n.dataset.i===i));
+  document.getElementById('dNo').textContent='STEP '+s.n;
+  document.getElementById('dTitle').textContent=s.t;
+  const b=document.getElementById('dBadge');b.textContent=BADGE[s.st];b.style.background=COL[s.st];
+  document.getElementById('dReal').innerHTML=s.real;
+  document.getElementById('dTheo').innerHTML=s.theo;
+  document.getElementById('dPaper').innerHTML='📄 '+s.paper[0]+' <a href="'+s.paper[1]+'" target="_blank">link</a>';
+  document.getElementById('dRepo').innerHTML='⌨ '+s.repo[0]+' <code>'+s.repo[1]+'</code>';
+}
+addEventListener('keydown',e=>{if(e.key==='ArrowRight')show((cur+1)%S.length);if(e.key==='ArrowLeft')show((cur+S.length-1)%S.length);});
+show(0);
+</script>
